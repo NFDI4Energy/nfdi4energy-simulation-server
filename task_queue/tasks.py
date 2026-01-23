@@ -6,10 +6,9 @@ from copy import deepcopy
 from celery import Celery
 from celery.utils.log import get_task_logger
 
-from multi_vector_simulator.server import run_simulation as mvs_simulation
-from multi_vector_simulator.utils.data_parser import convert_epa_params_to_mvs
-
-
+# from multi_vector_simulator.server import run_simulation as mvs_simulation
+import call_daceds
+import pypsa
 logger = get_task_logger(__name__)
 CELERY_BROKER_URL = (os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379"),)
 CELERY_RESULT_BACKEND = os.environ.get(
@@ -27,9 +26,11 @@ def run_simulation(simulation_input: dict,) -> dict:
     epa_json = deepcopy(simulation_input)
     dict_values = None
     try:
-        dict_values = convert_epa_params_to_mvs(simulation_input)
+        # dict_values = convert_epa_params_to_mvs(simulation_input)
         logger.debug("Converted epa parameters to mvs input")
-        simulation_output = mvs_simulation(dict_values)
+        logger.info("SCE-File"+str(simulation_input))
+        simulation_output= call_daceds.main(simulation_input)
+        # simulation_output = mvs_simulation(dict_values)
         logger.info("Simulation finished")
         simulation_output["SERVER"] = CELERY_TASK_NAME
     except Exception as e:

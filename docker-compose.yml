@@ -17,8 +17,9 @@ services:
     depends_on:
       - redis
     networks:
+       - dacedsx_default
 #      - caddy_network
-      - sim_network
+      #- sim_network
   worker-dev:
     environment:
       - CELERY_TASK_NAME=dev
@@ -32,7 +33,8 @@ services:
     depends_on:
       - redis
     networks:
-      - sim_network
+      - dacedsx_default
+      #- sim_network
   worker-open-plan:
     environment:
       - CELERY_TASK_NAME=open_plan
@@ -46,14 +48,18 @@ services:
     depends_on:
       - redis
     networks:
-      - sim_network
+      - dacedsx_default
+      #- sim_network
   redis:
     image: redis
     networks:
-    - sim_network
+      - dacedsx_default
+    #- sim_network
 
 networks:
+   dacedsx_default:
+      external: true
 #  caddy_network:
 #    external:
 #      name: docker_caddy_network
-  sim_network:
+  #sim_network:

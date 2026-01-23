@@ -100,7 +100,13 @@ def simulate_uploaded_json_files_dev(
     the value of `name` property of the input html tag should be `json_file` as the second
     argument of this function
     """
+    #json_file_content = json_file.file.read()
+    # with open("scenario.txt", "w", encoding="utf-8") as f:
+    #     f.write(json_file_content.decode("utf-8"))
+    # command = ["java", "-jar", "./target/SendScenarioObject.jar", "./scenario.json"]
+    print("Something")
     json_content = jsonable_encoder(json_file.file.read())
+    
     return run_simulation(request, input_json=json_content)
 
 
@@ -115,18 +121,22 @@ def simulate_uploaded_json_files_open_plan(
     json_content = jsonable_encoder(json_file.file.read())
     return run_simulation_open_plan(request, input_json=json_content)
 
-
+@app.post("/run_simulation")
 def run_simulation(request: Request, input_json=None, queue="dev") -> Response:
     """Send a simulation task to a celery worker"""
 
-    if input_json is None:
+    if input_json is None or input_json== "":
         input_dict = {
             "name": "dummy_json_input",
             "secondary_dict": {"val1": 2, "val2": [5, 6, 7, 8]},
         }
     else:
         input_dict = json.loads(input_json)
-
+        # input_dict={
+        #     "name": "dummy_json_input",
+        #     "secondary_dict": {"val1": 2, "val2": [5, 6, 7, 8]},
+        # }
+        pass
     # send the task to celery
     task = celery_app.send_task(
         f"{queue}.run_simulation", args=[input_dict], queue=queue, kwargs={}
@@ -137,7 +147,7 @@ def run_simulation(request: Request, input_json=None, queue="dev") -> Response:
     )
 
 
-@app.post("/run_simulation")
+@app.post("/run_simulation_dev")
 def run_simulation_dev(request: Request, input_json=None) -> Response:
     return run_simulation(request, input_json, queue="dev")
 

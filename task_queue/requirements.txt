@@ -2,3 +2,8 @@ celery
 flower
 redis
 python-multipart
+pypsa
+confluent_kafka
+urllib3
+avro
+requests

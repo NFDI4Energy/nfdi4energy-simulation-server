@@ -1,0 +1,12 @@
+FROM ghcr.io/astral-sh/uv:python3.13-trixie
+
+WORKDIR /usr/src/app
+
+RUN apt-get update && apt-get install -y --no-install-recommends git libhdf5-dev
+RUN git clone https://gitlab.com/mosaik/examples/mosaik-demo
+
+WORKDIR /usr/src/app/mosaik-demo
+RUN uv sync
+# RUN uv run python demo.py
+
+CMD ["uv", "run", "python", "demo.py"]

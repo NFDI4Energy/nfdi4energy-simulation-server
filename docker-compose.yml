@@ -1,5 +1,14 @@
 version: "3"
 services:
+  mosaik:
+    build:
+      dockerfile: mosaik/dockerfile
+    ports:
+      - "8000:8000"
+    restart:
+      unless-stopped
+    networks:
+      - sim_network
   web:
     environment:
       - MVS_DEV_VERSION=${MVS_DEV_VERSION}

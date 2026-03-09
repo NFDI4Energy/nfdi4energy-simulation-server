@@ -1,139 +1,114 @@
-# open-plan-tool simulation-server
+# Simulation Server (Generic Template)
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+A flexible, Docker-based architecture for running asynchronous simulation tasks via a web interface, message broker (RabbitMQ), and state cache (Redis).
 
-Project page:
-https://github.com/open-plan-tool/simulation-server
+This repository provides a generic template to dispatch simulation tasks to a queue of workers.
 
-Developed by [Reiner Lemoine Institut](https://reiner-lemoine-institut.de/en/) in the scope of the [open_plan project](https://reiner-lemoine-institut.de/en/open-plan-bottom-up-energy-transition/).
+## Architecture
 
-The open-plan-tool simulation-server runs energy model optimization on demand and returns optimal solution, if any. An example architecture in which this simulation-sever is provided on the following picture
+The system uses a microservice architecture built for scalability and generic simulation handling.
 
-![open-plan_structure](https://github.com/open-plan-tool/simulation-server/assets/4399407/58446a8d-f491-4cf5-be58-6a0d63718d08)
+```mermaid
+graph TD
+    Client[Client (Web GUI / API)] -->|HTTP POST JSON/Files| FastAPI[FastAPI Web Service]
+    FastAPI -->|Publish Task| RabbitMQ[(RabbitMQ Queue)]
+    FastAPI -->|Set Status 'PENDING'| Redis[(Redis Cache)]
+    
+    RabbitMQ -->|Consume Task| Worker1[Worker 1 (Python)]
+    RabbitMQ -->|Consume Task| WorkerN[Worker N]
+    
+    Worker1 -->|Read Inputs| InputVolume[Shared Volume: /data/resources]
+    Worker1 -->|Set Status 'RUNNING'| Redis
+    Worker1 -->|Write Outputs| OutputVolume[Shared Volume: /data/results]
+    Worker1 -->|Set Status 'DONE'| Redis
+    
+    Client -->|HTTP GET Status| FastAPI
+    FastAPI -->|Read Status| Redis
+    FastAPI -->|Discover Output Files| OutputVolume
+```
 
-The [open-plan-tool/gui](https://github.com/open-plan-tool/gui) sends simulation requests to a simulation server so that you can queue tasks and still use the app while the simulation to be done. The server can be running on your local computer, or you can set it up online. An online server hosted by Reiner Lemoine Institut is setup by default for open-plan-tool/gui
+## Sequence Flow
 
+The following sequence illustrates a typical end-to-end task execution:
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant FastAPI
+    participant SharedVolume as Shared Volume (/data)
+    participant RabbitMQ
+    participant Worker
+    participant Redis
 
-The code in this repository creates the simulation server and a basic server API to dispatch [mvs](https://github.com/rl-institut/multi-vector-simulator) simulation tasks to a queue of workers.
-The API typically receives a post request with a json input file, sends this file to a parser which
-initiate an MVS simulation. Once the simulation is done, a json response is sent back. The json results can also be retrieved with the task id.
+    Client->>FastAPI: POST /submit (Scenario Files)
+    FastAPI->>SharedVolume: Save files to /data/resources/{task_id}/
+    FastAPI->>RabbitMQ: Publish task_id & scenario JSON to 'simulation_requests'
+    FastAPI->>Redis: SET task:{task_id} status:PENDING
+    FastAPI-->>Client: Return {task_id}
+
+    RabbitMQ->>Worker: Deliver message (task_id, scenario)
+    Worker->>Redis: SET task:{task_id} status:RUNNING
+    Worker->>SharedVolume: Read inputs from /data/resources/{task_id}/
+    
+    Note over Worker: Execute Custom Simulation Logic
+
+    Worker->>SharedVolume: Write outputs to /data/results/{task_id}/
+    Worker->>Redis: SET task:{task_id} status:DONE
+    Worker->>RabbitMQ: ACK message
+
+    loop Polling Status
+        Client->>FastAPI: GET /check/{task_id}
+        FastAPI->>Redis: GET task:{task_id}
+        FastAPI->>SharedVolume: Discover files (if status is DONE)
+        FastAPI-->>Client: Return status & download URLs
+    end
+```
+
+## Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/)
+- [Docker Compose](https://docs.docker.com/compose/install/)
+
+## Getting Started
+
+1. **Clone the repository**
+```bash
+git clone https://github.com/NFDI4Energy/nfdi4energy-simulation-server
+cd simulation-server
+```
+
+2. **Start the stack**
+Run the following command to build the images and start the services (FastAPI, RabbitMQ, Redis, and a generic example worker):
+```bash
+docker-compose up -d --build
+```
+
+3. **Access the Web Interface**
+Open `http://localhost:5001` in your browser. You can upload a scenario file (JSON) to queue a new task.
+
+4. **Monitor the Worker**
+Check the logs of the example worker to see it process the queue:
+```bash
+docker-compose logs -f example_worker
+```
+
+5. **Stop the stack**
+```bash
+docker-compose down
+```
+
+## Creating Custom Workers
+
+To use your own simulation logic, modify or replace `task_queue/example_worker.py`. The fundamental requirements for a worker are:
+
+1. **Listen to RabbitMQ**: Subscribe to the `simulation_requests` queue.
+2. **Read Inputs**: Access user-uploaded files from `RESOURCES_DIR/{task_id}/`.
+3. **Execute**: Run your computationally heavy task, model execution, or custom code.
+4. **Write Outputs**: Save the resulting data/reports to `RESULTS_DIR/{task_id}/`.
+5. **Update State**: Update the `Redis` status token (`task:{task_id}`) to `DONE` and acknowledge the RabbitMQ message.
+
+The FastAPI web service will automatically detect any new files saved to `RESULTS_DIR /{task_id}/` and serve them as downloadable links to the client.
 
 ## License
 
-This project is licensed under `GNU AFFERO GENERAL PUBLIC LICENSE. See the LICENSE file for details.
-
-## Prerequisite
-
-You need to be able to run `docker-compose` commands, the simpler might be to install [docker desktop](https://www.docker.com/products/docker-desktop/)
-
-## Get started
-
-Run `sudo docker-compose up -d --build` to run the task queue and the webapp simultaneously.
-
-Now the webapp is available at `127.0.0.1:5001`
-
-Use
-
-    sudo docker-compose logs web
-
-to get the logs messages of the `web` service of the docker-compose.yml file
-
-
-Run `sudo docker-compose down` to shut the services down.
-
-## Using the simulation server with open_plan gui
-
-There are many possible configurations in which you can use the simulation server together with the [open_plan gui](https://github.com/open-plan-tool). 
-
- - You can do a fully local deploy of both the GUI and server
- - You can also deploy the server online and link your locally deployed GUI to it
- - At last, you can deploy online both the server and the GUI
-
-### local deploy of the server
-
-Once you ran the docker-compose command from [Get started menu](#Get started) above,
-you should be able to visit http://127.0.0.1:5001 and see a page where you can upload json files to start a simulation. 
-The `MVS_HOST_API` environment variable in open-plan GUI should then be set as `MVS_HOST_API=http://127.0.0.1:5001` (see the [instructions to deploy open-plan GUI](https://github.com/open-plan-tool/gui#deploy-locally-using-and-using-our-open-plan-mvs-server) for more help).
-The open-plan GUI can be then deployed locally and will run simulations on your local simulation server :)
-
-### online deploy of the server
-
-You need first to have access to online services to host the server (eg. one of those listed in https://geekflare.com/docker-hosting-platforms/). 
-You might need to adapt the docker-compose.yml file to be able to access the docker container on a subdomain of your service provider. 
-You can then visit a URL to see the page equivalent to http://127.0.0.1:5001 in [above section](#local deploy of the server). 
-You need to link your open-plan gui to this URL.
-
----
-**NOTE**
-
-In that case open-plan can be deployed both locally or online.
-
----
-
----
-**NOTE**
-
-open-plan GUI does not need to be deployed on the same service provider as the open-plan server.
-
----
-
-## Develop while services are running
-
-### Using [redis](https://redis.io/documentation)
-
-#### Ubuntu [install instructions](https://www.digitalocean.com/community/tutorials/how-to-install-and-secure-redis-on-ubuntu-18-04)
-
-    sudo apt update
-    sudo apt install redis-server
-
-Then go in redis conf file
-
-    sudo nano /etc/redis/redis.conf
-
-and look for `supervised` parameter, set it to `systemd`
-
-    supervised systemd
-
-
-Then start the service with
-
-    sudo systemctl restart redis.service
-
-or
-
-    sudo service redis-server start
-
-(to stop it use `sudo service redis-server stop`)
-Move to `task_queue` and run `. setup_redis.sh` to start the celery queue with redis a message
- broker.
-
-### Using [RabbitMQ](https://www.rabbitmq.com/getstarted.html)
-
-### Using [fastapi](https://fastapi.tiangolo.com/)
-
-In another terminal go the the root of the repo and run `. fastapi_run.sh`
-
-Now the fastapi app is available at `127.0.0.1:5001`
-
-
-## Docs
-
-To build the docs simply go to the `docs` folder
-
-    cd docs
-
-Install the requirements
-
-    pip install -r docs_requirements.txt
-
-and run
-
-    make html
-
-The output will then be located in `docs/_build/html` and can be opened with your favorite browser
-
-## Code linting
-
-Use `black .` to lint the python files inside the repo
-
+This project is licensed under the MIT License - see the LICENSE file for details.

@@ -10,21 +10,21 @@ The system uses a microservice architecture built for scalability and generic si
 
 ```mermaid
 graph TD
-    Client[Client (Web GUI / API)] -->|HTTP POST JSON/Files| FastAPI[FastAPI Web Service]
-    FastAPI -->|Publish Task| RabbitMQ[(RabbitMQ Queue)]
-    FastAPI -->|Set Status 'PENDING'| Redis[(Redis Cache)]
+    Client["Client (Web GUI / API)"] -->|HTTP POST JSON/Files| FastAPI[FastAPI Web Service]
+    FastAPI -->|"Publish Task"| RabbitMQ[(RabbitMQ Queue)]
+    FastAPI -->|"Set Status 'PENDING'"| Redis[(Redis Cache)]
     
-    RabbitMQ -->|Consume Task| Worker1[Worker 1 (Python)]
-    RabbitMQ -->|Consume Task| WorkerN[Worker N]
+    RabbitMQ -->|"Consume Task"| Worker1["Worker 1 (Python)"]
+    RabbitMQ -->|"Consume Task"| WorkerN["Worker N"]
     
-    Worker1 -->|Read Inputs| InputVolume[Shared Volume: /data/resources]
-    Worker1 -->|Set Status 'RUNNING'| Redis
-    Worker1 -->|Write Outputs| OutputVolume[Shared Volume: /data/results]
-    Worker1 -->|Set Status 'DONE'| Redis
+    Worker1 -->|"Read Inputs"| InputVolume["Shared Volume: /data/resources"]
+    Worker1 -->|"Set Status 'RUNNING'"| Redis
+    Worker1 -->|"Write Outputs"| OutputVolume["Shared Volume: /data/results"]
+    Worker1 -->|"Set Status 'DONE'"| Redis
     
-    Client -->|HTTP GET Status| FastAPI
-    FastAPI -->|Read Status| Redis
-    FastAPI -->|Discover Output Files| OutputVolume
+    Client -->|"HTTP GET Status"| FastAPI
+    FastAPI -->|"Read Status"| Redis
+    FastAPI -->|"Discover Output Files"| OutputVolume
 ```
 
 ## Sequence Flow

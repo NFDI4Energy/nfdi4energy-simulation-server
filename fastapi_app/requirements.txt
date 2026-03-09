@@ -1,7 +1,7 @@
 fastapi
 aiofiles
-jinja2==3.0
+jinja2
 uvicorn
-celery
 redis
 python-multipart
+pika

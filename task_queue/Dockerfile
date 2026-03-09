@@ -1,32 +1,9 @@
-FROM python:3.8-slim
-
-ARG mvs_version
-
-ENV MVS_VERSION $mvs_version
-
-ENV CELERY_BROKER_URL redis://redis:6379/0
-ENV CELERY_RESULT_BACKEND redis://redis:6379/0
-
-RUN apt-get update && \
-    apt-get install -y git && \
-    apt-get install coinor-cbc -y && \
-    apt-get install graphviz -y
+FROM python:3.10-slim
 
 COPY requirements.txt /tmp/
-
-RUN python -m pip install --upgrade pip
 RUN pip install -r /tmp/requirements.txt
-# install multi-vector-simulator's version pinned in docker-compose.yml file
-RUN pip install multi-vector-simulator==$MVS_VERSION importlib-metadata==4.13.0 pyomo==5.7.2
 
-run echo $(pip freeze)
-COPY . /queue
+COPY . /worker
+WORKDIR /worker
 
-# avoid running as root user
-RUN useradd --create-home appuser
-RUN chown -R appuser /queue
-USER appuser
-
-WORKDIR /queue
-
-ENTRYPOINT celery -A tasks worker --loglevel=info --queues=$CELERY_TASK_NAME
+CMD ["python", "example_worker.py"]

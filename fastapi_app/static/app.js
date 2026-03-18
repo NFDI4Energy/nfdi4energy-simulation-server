@@ -1,66 +1,44 @@
-const scenarioDrop = document.getElementById('scenario-drop-zone');
-const scenarioInput = document.getElementById('scenario-input');
-const scenarioListEl = document.getElementById('scenario-list');
-
-const resourceDrop = document.getElementById('resource-drop-zone');
-const resourceInput = document.getElementById('resource-input');
-const resourceListEl = document.getElementById('resource-list');
-
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const fileListEl = document.getElementById('file-list');
 const submitBtn = document.getElementById('submit-btn');
 
-let scenarioFile = null;
-let resourceFiles = [];
+let selectedFiles = [];
 
-function setupDropZone(zone, input, isScenario) {
-    zone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        zone.classList.add('dragover');
-    });
+// --- Drag & Drop ---
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+});
 
-    zone.addEventListener('dragleave', () => {
-        zone.classList.remove('dragover');
-    });
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('dragover');
+});
 
-    zone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        zone.classList.remove('dragover');
-        handleFiles(e.dataTransfer.files, isScenario);
-    });
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    addFiles(e.dataTransfer.files);
+});
 
-    input.addEventListener('change', () => {
-        handleFiles(input.files, isScenario);
-        input.value = '';
-    });
-}
+// --- File Input ---
+fileInput.addEventListener('change', () => {
+    addFiles(fileInput.files);
+    fileInput.value = '';
+});
 
-setupDropZone(scenarioDrop, scenarioInput, true);
-setupDropZone(resourceDrop, resourceInput, false);
-
-function handleFiles(files, isScenario) {
-    if (files.length === 0) return;
-    
-    if (isScenario) {
-        // Take only the first file for scenario
-        scenarioFile = files[0];
-    } else {
-        // Add multiple files for resources
-        for (const f of files) {
-            if (!resourceFiles.find(s => s.name === f.name && s.size === f.size)) {
-                resourceFiles.push(f);
-            }
+function addFiles(fileListObj) {
+    for (const f of fileListObj) {
+        if (!selectedFiles.find(s => s.name === f.name && s.size === f.size)) {
+            selectedFiles.push(f);
         }
     }
-    renderFiles();
+    renderFileList();
 }
 
-function removeScenario() {
-    scenarioFile = null;
-    renderFiles();
-}
-
-function removeResource(index) {
-    resourceFiles.splice(index, 1);
-    renderFiles();
+function removeFile(index) {
+    selectedFiles.splice(index, 1);
+    renderFileList();
 }
 
 function formatSize(bytes) {
@@ -69,18 +47,15 @@ function formatSize(bytes) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
-function renderFiles() {
-    if (scenarioFile) {
-        scenarioListEl.innerHTML = `<li><span class="name">${scenarioFile.name}</span> <span class="size">${formatSize(scenarioFile.size)}</span><button class="remove" onclick="removeScenario()">✕</button></li>`;
-    } else {
-        scenarioListEl.innerHTML = '';
-    }
-
-    resourceListEl.innerHTML = resourceFiles.map((f, i) =>
-        `<li><span class="name">${f.name}</span> <span class="size">${formatSize(f.size)}</span><button class="remove" onclick="removeResource(${i})">✕</button></li>`
+function renderFileList() {
+    fileListEl.innerHTML = selectedFiles.map((f, i) =>
+        `<li>
+            <span class="name">${f.name}</span>
+            <span class="size">${formatSize(f.size)}</span>
+            <button class="remove" onclick="removeFile(${i})">✕</button>
+        </li>`
     ).join('');
-
-    submitBtn.disabled = !scenarioFile;
+    submitBtn.disabled = selectedFiles.length === 0;
 }
 
 // --- Submit ---
@@ -89,8 +64,7 @@ async function submitSimulation() {
     submitBtn.textContent = 'Uploading...';
 
     const formData = new FormData();
-    formData.append('scenario_file', scenarioFile);
-    resourceFiles.forEach(f => formData.append('resource_files', f));
+    selectedFiles.forEach(f => formData.append('files', f));
 
     try {
         const res = await fetch('/submit', { method: 'POST', body: formData });
@@ -160,9 +134,8 @@ function showResults(taskId, downloads) {
 }
 
 function resetForm() {
-    scenarioFile = null;
-    resourceFiles = [];
-    renderFiles();
+    selectedFiles = [];
+    renderFileList();
     submitBtn.disabled = true;
     submitBtn.textContent = 'Submit Simulation';
     document.getElementById('upload-card').classList.remove('hidden');

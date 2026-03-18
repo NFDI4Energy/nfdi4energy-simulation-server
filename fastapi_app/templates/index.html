@@ -16,19 +16,14 @@
 
     <!-- Upload Card -->
     <div class="card" id="upload-card">
-        <h2>1. Select Scenario File (Required JSON)</h2>
-        <div class="upload-area" id="scenario-drop-zone" onclick="document.getElementById('scenario-input').click()">
-            <p>Click or drag scenario.json here</p>
-        </div>
-        <input type="file" id="scenario-input" accept=".json" class="hidden" />
-        <ul class="file-list" id="scenario-list"></ul>
+        <h2>1. Select Simulation Files</h2>
 
-        <h2>2. Select Resource Files (Optional)</h2>
-        <div class="upload-area" id="resource-drop-zone" onclick="document.getElementById('resource-input').click()">
-            <p>Click or drag network resource files here</p>
+        <div class="upload-area" id="drop-zone" onclick="document.getElementById('file-input').click()">
+            <p>Click or drag files here to upload</p>
         </div>
-        <input type="file" id="resource-input" multiple class="hidden" />
-        <ul class="file-list" id="resource-list"></ul>
+        <input type="file" id="file-input" multiple class="hidden" />
+
+        <ul class="file-list" id="file-list"></ul>
 
         <button class="btn" id="submit-btn" onclick="submitSimulation()" disabled>
             Submit Simulation

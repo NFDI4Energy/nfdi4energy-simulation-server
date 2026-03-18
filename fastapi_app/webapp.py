@@ -35,28 +35,44 @@ def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
-@app.post("/submit")
-async def submit_simulation(files: List[UploadFile] = File(...)):
-    """Accept uploaded files, save to /data/resources/{task_id}, queue the task."""
-    task_id = str(uuid.uuid4())
+from models import Scenario
+from pydantic import ValidationError
 
+@app.post("/submit")
+async def submit_simulation(
+    scenario_file: UploadFile = File(...),
+    resource_files: List[UploadFile] = File(default=[])
+):
+    
+    # 1. Read and validate scenario
+    content = await scenario_file.read()
+    try:
+        scenario_dict = json.loads(content)
+        scenario = Scenario(**scenario_dict)
+    except json.JSONDecodeError:
+        return JSONResponse(status_code=400, content={"error": "Invalid JSON mapping in scenario file"})
+    except ValidationError as e:
+        return JSONResponse(status_code=400, content={"error": f"Scenario validation failed: {e.errors()}"})
+
+    # 2. Setup task directory
+    task_id = str(uuid.uuid4())
     task_resources_dir = os.path.join(RESOURCES_DIR, task_id)
     os.makedirs(task_resources_dir, exist_ok=True)
 
-    # First file is always the scenario description
-    scenario_json = None
+    # 3. Save scenario file
+    with open(os.path.join(task_resources_dir, scenario_file.filename), "wb") as out:
+        out.write(content)
 
-    for i, f in enumerate(files):
-        content = await f.read()
-        file_path = os.path.join(task_resources_dir, f.filename)
-        with open(file_path, "wb") as out:
-            out.write(content)
+    # 4. Save resource files
+    for f in resource_files:
+        if f.filename:
+            res_content = await f.read()
+            with open(os.path.join(task_resources_dir, f.filename), "wb") as out:
+                out.write(res_content)
 
-        if i == 0:
-            scenario_json = json.loads(content)
-
+    # 5. Queue task
     queue = SimulationQueue()
-    queue.publish(task_id, scenario_json)
+    queue.publish(task_id, scenario_dict)
     queue.close()
 
     redis_client.hset(

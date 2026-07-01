@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from rabbitmq_client import SimulationQueue
+from rabbitmq_client import SimulationQueue, get_handler
 
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
@@ -38,36 +38,32 @@ def index(request: Request):
 @app.post("/submit")
 async def submit_simulation(
     files: List[UploadFile] = File(...),
-    framework: str = Query(default="default"),
+    framework: str = Query(default="dacedsx"),
 ):
     """Accept uploaded files, save to /data/resources/{task_id}, queue the task."""
-    task_id = str(uuid.uuid4())
+    handler = get_handler(framework)
 
-    task_resources_dir = os.path.join(RESOURCES_DIR, task_id)
+    task_id = str(uuid.uuid4())
+    task_resources_dir = handler.get_resources_dir(task_id)
     os.makedirs(task_resources_dir, exist_ok=True)
 
-    # First file is always the scenario description
-    scenario_json = None
-
-    for i, f in enumerate(files):
+    files_content = []
+    for f in files:
         content = await f.read()
         file_path = os.path.join(task_resources_dir, f.filename)
         with open(file_path, "wb") as out:
             out.write(content)
+        files_content.append((f.filename, content))
 
-        if i == 0:
-            scenario_json = json.loads(content)
+    scenario_json = handler.parse_scenario(files_content)
 
     queue = SimulationQueue()
-    if framework == "mosaik":
-        queue.publish_mosaik(task_id, scenario_json)
-    else:
-        queue.publish(task_id, scenario_json)
+    handler.publish(task_id, scenario_json, queue)
     queue.close()
 
     redis_client.hset(
         f"task:{task_id}",
-        mapping={"status": "PENDING", "files": "[]", "error": "", "framework": framework},
+        mapping={**{"status": "PENDING", "files": "[]", "error": ""}, **handler.get_redis_fields()},
     )
 
     return JSONResponse(content={"task_id": task_id})

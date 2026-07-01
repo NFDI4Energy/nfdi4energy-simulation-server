@@ -124,109 +124,84 @@ function renderMosaikFileList() {
 }
 
 // --- Submit ---
-async function submitDaceDS() {
+const FRAMEWORKS = { daceds: 'dacedsx', mosaik: 'mosaik' };
+
+async function submitSimulation(framework) {
+    const frameworkName = FRAMEWORKS[framework];
+    const endpoint = '/submit/' + frameworkName;
+    const files = framework === 'daceds' ? selectedFiles : [selectedMosaikFile];
+
+    const submitBtn = framework === 'daceds' ? submitBtn : submitMosaikBtn;
     submitBtn.disabled = true;
     submitBtn.textContent = 'Uploading...';
 
     const formData = new FormData();
-    selectedFiles.forEach(f => formData.append('files', f));
+    files.forEach(f => formData.append('files', f));
 
     try {
-        const res = await fetch('/submit', { method: 'POST', body: formData });
+        const res = await fetch(endpoint, { method: 'POST', body: formData });
         const data = await res.json();
 
         if (!res.ok) {
-            alert('Error: ' + (data.error || 'Submission failed'));
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Submit Simulation';
+            alert('Error: ' + (data.detail || 'Submission failed'));
+            resetBtn(submitBtn, framework);
             return;
         }
 
         const taskId = data.task_id;
-        document.getElementById('daceds-status-card').classList.remove('hidden');
-        document.getElementById('daceds-task-id-display').textContent = 'Task ID: ' + taskId;
-        setStatus('pending', 'Queued — waiting for a worker...', 'daceds');
+        document.getElementById(framework + '-status-card').classList.remove('hidden');
+        document.getElementById(framework + '-task-id-display').textContent = 'Task ID: ' + taskId;
+        setStatus('pending', 'Queued — waiting for a worker...', framework);
 
+        let attempts = 0;
         const poll = setInterval(async () => {
+            attempts++;
+            if (attempts > 900) {
+                clearInterval(poll);
+                setStatus('error', 'Timeout: Worker did not respond.', framework);
+                resetBtn(submitBtn, framework);
+                return;
+            }
+
             const check = await fetch('/check/' + taskId);
             const status = await check.json();
 
             if (status.status === 'RUNNING') {
-                setStatus('running', 'Simulation is running...', 'daceds');
+                setStatus('running', 'Simulation is running...', framework);
             } else if (status.status === 'DONE') {
                 clearInterval(poll);
-                setStatus('done', 'Simulation complete!', 'daceds');
-                showResults(taskId, status.downloads || [], 'daceds');
+                setStatus('done', 'Simulation complete!', framework);
+                showResults(taskId, status.downloads || [], framework);
+                resetBtn(submitBtn, framework);
             } else if (status.status === 'ERROR') {
                 clearInterval(poll);
-                setStatus('error', 'Error: ' + (status.error || 'Unknown error'), 'daceds');
+                setStatus('error', 'Error: ' + (status.error || 'Unknown error'), framework);
+                resetBtn(submitBtn, framework);
             }
         }, 2000);
 
     } catch (err) {
         alert('Network error: ' + err.message);
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Submit Simulation';
+        resetBtn(submitBtn, framework);
     }
 }
 
-async function submitMosaik() {
-    submitMosaikBtn.disabled = true;
-    submitMosaikBtn.textContent = 'Uploading...';
-
-    const formData = new FormData();
-    formData.append('file', selectedMosaikFile);
-
-    try {
-        const res = await fetch('/submit_mosaik', { method: 'POST', body: formData });
-        const data = await res.json();
-
-        if (!res.ok) {
-            alert('Error: ' + (data.error || 'Submission failed'));
-            submitMosaikBtn.disabled = false;
-            submitMosaikBtn.textContent = 'Submit Mosaik Simulation';
-            return;
-        }
-
-        const taskId = data.task_id;
-        document.getElementById('mosaik-status-card').classList.remove('hidden');
-        document.getElementById('mosaik-task-id-display').textContent = 'Task ID: ' + taskId;
-        setStatus('pending', 'Queued — waiting for a worker...', 'mosaik');
-
-        const poll = setInterval(async () => {
-            const check = await fetch('/check/' + taskId);
-            const status = await check.json();
-
-            if (status.status === 'RUNNING') {
-                setStatus('running', 'Simulation is running...', 'mosaik');
-            } else if (status.status === 'DONE') {
-                clearInterval(poll);
-                setStatus('done', 'Simulation complete!', 'mosaik');
-                showResults(taskId, status.downloads || [], 'mosaik');
-            } else if (status.status === 'ERROR') {
-                clearInterval(poll);
-                setStatus('error', 'Error: ' + (status.error || 'Unknown error'), 'mosaik');
-            }
-        }, 2000);
-
-    } catch (err) {
-        alert('Network error: ' + err.message);
-        submitMosaikBtn.disabled = false;
-        submitMosaikBtn.textContent = 'Submit Mosaik Simulation';
-    }
+function resetBtn(btn, framework) {
+    btn.disabled = false;
+    btn.textContent = framework === 'daceds' ? 'Submit Simulation' : 'Submit Mosaik Simulation';
 }
 
-function setStatus(type, message, tab) {
-    const bar = document.getElementById(tab + '-status-bar');
+function setStatus(type, message, framework) {
+    const bar = document.getElementById(framework + '-status-bar');
     bar.className = 'status-bar ' + type;
-    document.getElementById(tab + '-status-text').textContent = message;
-    document.getElementById(tab + '-status-spinner').style.display =
+    document.getElementById(framework + '-status-text').textContent = message;
+    document.getElementById(framework + '-status-spinner').style.display =
         (type === 'done' || type === 'error') ? 'none' : 'block';
 }
 
-function showResults(taskId, downloads, tab) {
-    const resultsCard = document.getElementById(tab + '-results-card');
-    const resultsList = document.getElementById(tab + '-results-list');
+function showResults(taskId, downloads, framework) {
+    const resultsCard = document.getElementById(framework + '-results-card');
+    const resultsList = document.getElementById(framework + '-results-list');
     resultsCard.classList.remove('hidden');
 
     if (downloads.length === 0) {
@@ -235,25 +210,25 @@ function showResults(taskId, downloads, tab) {
     }
 
     resultsList.innerHTML = downloads.map(url => {
-        const filename = url.split('/').pop();
+        const filename = url.substring(url.lastIndexOf('/') + 1);
         return `<li><a href="${url}" download>${filename}</a></li>`;
     }).join('');
 }
 
-function resetForm(tab) {
-    if (tab === 'daceds') {
+function resetForm(framework) {
+    if (framework === 'daceds') {
         selectedFiles = [];
         renderFileList();
-        submitBtn.disabled = true;
+        submitBtn.disabled = selectedFiles.length === 0;
         submitBtn.textContent = 'Submit Simulation';
-        document.getElementById('daceds-status-card').classList.add('hidden');
-        document.getElementById('daceds-results-card').classList.add('hidden');
-    } else if (tab === 'mosaik') {
+    } else {
         selectedMosaikFile = null;
         renderMosaikFileList();
         submitMosaikBtn.disabled = true;
         submitMosaikBtn.textContent = 'Submit Mosaik Simulation';
-        document.getElementById('mosaik-status-card').classList.add('hidden');
-        document.getElementById('mosaik-results-card').classList.add('hidden');
     }
+    document.getElementById(framework + '-status-card').classList.add('hidden');
+    document.getElementById(framework + '-results-card').classList.add('hidden');
+    document.getElementById(framework + '-status-text').textContent = '';
+    document.getElementById(framework + '-task-id-display').textContent = '';
 }

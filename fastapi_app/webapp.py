@@ -5,12 +5,12 @@ import mimetypes
 from typing import List
 
 import redis
-from fastapi import FastAPI, Request, UploadFile, File, Query
+from fastapi import FastAPI, Request, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from rabbitmq_client import SimulationQueue, get_handler
+from rabbitmq_client import SimulationQueue, HANDLERS
 
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
@@ -35,13 +35,15 @@ def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
-@app.post("/submit")
-async def submit_simulation(
-    files: List[UploadFile] = File(...),
-    framework: str = Query(default="dacedsx"),
-):
+@app.post("/submit/{framework}")
+async def submit_simulation(framework: str, files: List[UploadFile] = File(...)):
     """Accept uploaded files, save to /data/resources/{task_id}, queue the task."""
-    handler = get_handler(framework)
+    handler = HANDLERS.get(framework)
+    if handler is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown framework: '{framework}'. Supported: {list(HANDLERS.keys())}",
+        )
 
     task_id = str(uuid.uuid4())
     task_resources_dir = handler.get_resources_dir(task_id)

@@ -5,7 +5,7 @@ import mimetypes
 from typing import List
 
 import redis
-from fastapi import FastAPI, Request, UploadFile, File
+from fastapi import FastAPI, Request, UploadFile, File, Query
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -36,7 +36,10 @@ def index(request: Request):
 
 
 @app.post("/submit")
-async def submit_simulation(files: List[UploadFile] = File(...)):
+async def submit_simulation(
+    files: List[UploadFile] = File(...),
+    framework: str = Query(default="default"),
+):
     """Accept uploaded files, save to /data/resources/{task_id}, queue the task."""
     task_id = str(uuid.uuid4())
 
@@ -56,39 +59,15 @@ async def submit_simulation(files: List[UploadFile] = File(...)):
             scenario_json = json.loads(content)
 
     queue = SimulationQueue()
-    queue.publish(task_id, scenario_json)
+    if framework == "mosaik":
+        queue.publish_mosaik(task_id, scenario_json)
+    else:
+        queue.publish(task_id, scenario_json)
     queue.close()
 
     redis_client.hset(
         f"task:{task_id}",
-        mapping={"status": "PENDING", "files": "[]", "error": ""},
-    )
-
-    return JSONResponse(content={"task_id": task_id})
-
-
-@app.post("/submit_mosaik")
-async def submit_mosaik_simulation(file: UploadFile = File(...)):
-    """Accept uploaded scenario file for mosaik simulation, save to resources dir, queue task."""
-    task_id = str(uuid.uuid4())
-
-    task_resources_dir = os.path.join(RESOURCES_DIR, task_id)
-    os.makedirs(task_resources_dir, exist_ok=True)
-
-    content = await file.read()
-    file_path = os.path.join(task_resources_dir, file.filename)
-    with open(file_path, "wb") as f:
-        f.write(content)
-
-    scenario_json = json.loads(content)
-
-    queue = SimulationQueue()
-    queue.publish_mosaik(task_id, scenario_json)
-    queue.close()
-
-    redis_client.hset(
-        f"task:{task_id}",
-        mapping={"status": "PENDING", "files": "[]", "error": ""},
+        mapping={"status": "PENDING", "files": "[]", "error": "", "framework": framework},
     )
 
     return JSONResponse(content={"task_id": task_id})
@@ -102,7 +81,8 @@ async def check_task(task_id: str):
         return JSONResponse(content={"status": "NOT_FOUND"}, status_code=404)
 
     status = data[b"status"].decode()
-    response = {"task_id": task_id, "status": status}
+    framework = data.get(b"framework", b"default").decode()
+    response = {"task_id": task_id, "status": status, "framework": framework}
 
     if status == "DONE":
         # Scan actual results directory for files

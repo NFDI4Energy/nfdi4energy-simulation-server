@@ -6,3 +6,9 @@ redis
 python-multipart
 pika
 pydantic
+authlib
+httpx
+itsdangerous
+sqlalchemy
+psycopg2-binary
+confluent-kafka

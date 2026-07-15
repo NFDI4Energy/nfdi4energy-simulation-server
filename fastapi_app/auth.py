@@ -1,5 +1,7 @@
 import os
 import logging
+from typing import Optional
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import RedirectResponse, JSONResponse
@@ -20,6 +22,10 @@ OIDC_DISCOVERY_URL = os.environ.get(
     "OIDC_DISCOVERY_URL",
     "https://regapp.nfdi-aai.de/oidc/realms/nfdi/.well-known/openid-configuration",
 )
+OIDC_REDIRECT_URI = os.environ.get(
+    "OIDC_REDIRECT_URI",
+    "https://localhost:5001/auth/callback",
+)
 
 oauth.register(
     name="simaas",
@@ -36,8 +42,17 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 @router.get("/login")
 async def login(request: Request):
-    redirect_uri = request.url_for("auth_callback")
-    return await oauth.simaas.authorize_redirect(request, redirect_uri)
+    try:
+        return await oauth.simaas.authorize_redirect(request, OIDC_REDIRECT_URI)
+    except Exception as exc:
+        logger.exception("Failed to redirect to OIDC provider")
+        return JSONResponse(
+            status_code=502,
+            content={
+                "error": "Failed to connect to the authentication provider. "
+                         "Please verify that the server has internet access and can reach the OIDC provider."
+            }
+        )
 
 
 @router.get("/callback")
@@ -88,13 +103,14 @@ async def auth_callback(request: Request, db: Session = Depends(get_db)):
         logger.info("Updated existing user: sub=%s", sub)
 
     request.session["user_id"] = user.id
-    return RedirectResponse(url="/")
+    return RedirectResponse(url="/dashboard/")
 
 
 @router.get("/logout")
 async def logout(request: Request):
     request.session.clear()
-    return RedirectResponse(url="/")
+    logger.info("Local session cleared. Redirecting to dashboard.")
+    return RedirectResponse(url="/dashboard/")
 
 
 @router.get("/me")
@@ -110,7 +126,7 @@ async def me(request: Request, db: Session = Depends(get_db)):
     }
 
 
-def get_current_user_or_none(request: Request, db: Session) -> User | None:
+def get_current_user_or_none(request: Request, db: Session) -> Optional[User]:
     user_id = request.session.get("user_id")
     if not user_id:
         return None

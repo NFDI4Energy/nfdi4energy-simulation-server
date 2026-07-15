@@ -1,0 +1,523 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kafka
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zookeeper
+  namespace: kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zookeeper
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      containers:
+      - name: zookeeper
+        image: confluentinc/cp-zookeeper:7.5.2
+        ports:
+        - containerPort: 2181
+          hostPort: 2181
+        env:
+        - name: ZOOKEEPER_CLIENT_PORT
+          value: "2181"
+        - name: ZOOKEEPER_TICK_TIME
+          value: "2000"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper
+  namespace: kafka
+spec:
+  ports:
+  - port: 2181
+    targetPort: 2181
+  selector:
+    app: zookeeper
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: broker
+  namespace: kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: broker
+  template:
+    metadata:
+      labels:
+        app: broker
+    spec:
+      containers:
+      - name: broker
+        image: confluentinc/cp-server:7.5.2
+        ports:
+        - containerPort: 9092
+          hostPort: 9092
+        - containerPort: 29092
+          hostPort: 29092
+        env:
+        - name: KAFKA_BROKER_ID
+          value: "1"
+        - name: KAFKA_ZOOKEEPER_CONNECT
+          value: "zookeeper:2181"
+        - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+          value: "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+        - name: KAFKA_LISTENERS
+          value: "PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092"
+        - name: KAFKA_ADVERTISED_LISTENERS
+          value: "PLAINTEXT://broker.kafka.svc.cluster.local:29092,PLAINTEXT_HOST://broker.kafka.svc.cluster.local:9092"
+        - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+          value: "1"
+        - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
+          value: "0"
+        - name: KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR
+          value: "1"
+        - name: KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR
+          value: "1"
+        - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+          value: "1"
+        - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+          value: "1"
+        - name: KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL
+          value: "http://schema-registry:8081"
+        - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
+          value: "true"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: broker
+  namespace: kafka
+spec:
+  ports:
+  - name: internal
+    port: 29092
+    targetPort: 29092
+  - name: external
+    port: 9092
+    targetPort: 9092
+  selector:
+    app: broker
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: schema-registry
+  namespace: kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: schema-registry
+  template:
+    metadata:
+      labels:
+        app: schema-registry
+    spec:
+      containers:
+      - name: schema-registry
+        image: confluentinc/cp-schema-registry:7.5.2
+        ports:
+        - containerPort: 8081
+          hostPort: 8081
+        command: ["bash","-c"]
+        args:
+        - |
+          cat > /tmp/sr.properties <<'EOF'
+          listeners=http://0.0.0.0:8081
+          kafkastore.bootstrap.servers=PLAINTEXT://broker:29092
+          kafkastore.topic=_schemas
+          host.name=schema-registry
+          debug=false
+          EOF
+          exec schema-registry-start /tmp/sr.properties
+        startupProbe:
+          tcpSocket:
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 30
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8081
+          initialDelaySeconds: 60
+          periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: schema-registry
+  namespace: kafka
+spec:
+  ports:
+  - port: 8081
+    targetPort: 8081
+  selector:
+    app: schema-registry
+
+---
+# Confluent Control Center (UI)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-center
+  namespace: kafka
+  labels:
+    app: control-center
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: control-center
+  template:
+    metadata:
+      labels:
+        app: control-center
+    spec:
+      containers:
+      - name: control-center
+        image: confluentinc/cp-enterprise-control-center:7.5.2
+        ports:
+        - containerPort: 9021
+          hostPort: 9021
+        env:
+        - name: CONTROL_CENTER_BOOTSTRAP_SERVERS
+          value: "broker.kafka.svc.cluster.local:29092"
+        - name: CONTROL_CENTER_CONNECT_CONNECT-DEFAULT_CLUSTER
+          value: "connect:8083"
+        - name: CONTROL_CENTER_KSQL_KSQLDB1_URL
+          value: "http://ksqldb-server:8088"
+        - name: CONTROL_CENTER_KSQL_KSQLDB1_ADVERTISED_URL
+          value: "http://localhost:8088"
+        - name: CONTROL_CENTER_SCHEMA_REGISTRY_URL
+          value: "http://schema-registry.kafka.svc.cluster.local:8081"
+        - name: CONTROL_CENTER_REPLICATION_FACTOR
+          value: "1"
+        - name: CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS
+          value: "1"
+        - name: CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS
+          value: "1"
+        - name: CONFLUENT_METRICS_TOPIC_REPLICATION
+          value: "1"
+        - name: PORT
+          value: "9021"
+        resources: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: control-center
+  namespace: kafka
+spec:
+  ports:
+  - port: 9021
+    targetPort: 9021
+  selector:
+    app: control-center
+
+---
+# Kafka Connect (connectors)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: connect
+  namespace: kafka
+  labels:
+    app: connect
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: connect
+  template:
+    metadata:
+      labels:
+        app: connect
+    spec:
+      containers:
+      - name: connect
+        image: cnfldemos/cp-server-connect-datagen:0.6.2-7.5.0
+        ports:
+        - containerPort: 8083
+          hostPort: 8083
+        env:
+        - name: CONNECT_BOOTSTRAP_SERVERS
+          value: "broker:29092"
+        - name: CONNECT_REST_ADVERTISED_HOST_NAME
+          value: "connect"
+        - name: CONNECT_GROUP_ID
+          value: "compose-connect-group"
+        - name: CONNECT_CONFIG_STORAGE_TOPIC
+          value: "docker-connect-configs"
+        - name: CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR
+          value: "1"
+        - name: CONNECT_OFFSET_FLUSH_INTERVAL_MS
+          value: "10000"
+        - name: CONNECT_OFFSET_STORAGE_TOPIC
+          value: "docker-connect-offsets"
+        - name: CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR
+          value: "1"
+        - name: CONNECT_STATUS_STORAGE_TOPIC
+          value: "docker-connect-status"
+        - name: CONNECT_STATUS_STORAGE_REPLICATION_FACTOR
+          value: "1"
+        - name: CONNECT_KEY_CONVERTER
+          value: "org.apache.kafka.connect.storage.StringConverter"
+        - name: CONNECT_VALUE_CONVERTER
+          value: "io.confluent.connect.avro.AvroConverter"
+        - name: CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL
+          value: "http://schema-registry:8081"
+        - name: CONNECT_PLUGIN_PATH
+          value: "/usr/share/java,/usr/share/confluent-hub-components"
+        - name: CONNECT_LOG4J_LOGGERS
+          value: "org.apache.zookeeper=ERROR,org.I0Itec.zkclient=ERROR,org.reflections=ERROR"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: connect
+  namespace: kafka
+spec:
+  ports:
+  - port: 8083
+    targetPort: 8083
+  selector:
+    app: connect
+
+---
+# REST Proxy (HTTP access to Kafka)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rest-proxy
+  namespace: kafka
+  labels:
+    app: rest-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rest-proxy
+  template:
+    metadata:
+      labels:
+        app: rest-proxy
+    spec:
+      containers:
+      - name: rest-proxy
+        image: confluentinc/cp-kafka-rest:7.5.2
+        ports:
+        - containerPort: 8082
+          hostPort: 8082
+        env:
+        - name: KAFKA_REST_BOOTSTRAP_SERVERS
+          value: "broker:29092"
+        - name: KAFKA_REST_LISTENERS
+          value: "http://0.0.0.0:8082"
+        - name: KAFKA_REST_SCHEMA_REGISTRY_URL
+          value: "http://schema-registry:8081"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rest-proxy
+  namespace: kafka
+spec:
+  ports:
+  - port: 8082
+    targetPort: 8082
+  selector:
+    app: rest-proxy
+
+---
+# ksqlDB Server (stream processing)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ksqldb-server
+  namespace: kafka
+  labels:
+    app: ksqldb-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ksqldb-server
+  template:
+    metadata:
+      labels:
+        app: ksqldb-server
+    spec:
+      containers:
+      - name: ksqldb-server
+        image: confluentinc/cp-ksqldb-server:7.5.2
+        ports:
+        - containerPort: 8088
+          hostPort: 8088
+        env:
+        - name: KSQL_BOOTSTRAP_SERVERS
+          value: "broker:29092"
+        - name: KSQL_HOST_NAME
+          value: "ksqldb-server"
+        - name: KSQL_LISTENERS
+          value: "http://0.0.0.0:8088"
+        - name: KSQL_KSQL_SCHEMA_REGISTRY_URL
+          value: "http://schema-registry:8081"
+        - name: KSQL_KSQL_CONNECT_URL
+          value: "http://connect:8083"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ksqldb-server
+  namespace: kafka
+spec:
+  ports:
+  - port: 8088
+    targetPort: 8088
+  selector:
+    app: ksqldb-server
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: simservice
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: simservice
+  namespace: simservice
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: simservice-job-manager
+  namespace: simservice
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "delete", "get", "list", "watch", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: simservice-job-manager-binding
+  namespace: simservice
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: simservice-job-manager
+subjects:
+  - kind: ServiceAccount
+    name: simservice
+    namespace: simservice
+---
+# Shared volume for all containers
+# Start minikube with: minikube start --mount --mount-string="/home/cori/simservice-data:/data"
+# Or use: minikube mount /home/cori/simservice-data:/data
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: simservice-data-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual
+  hostPath:
+    path: /data
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: simservice-data-pvc
+  namespace: simservice
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simservice
+  namespace: simservice
+  labels:
+    app: simservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simservice
+  template:
+    metadata:
+      labels:
+        app: simservice
+    spec:
+      serviceAccountName: simservice
+      containers:
+      - name: simservice
+        image: simservice/simservice:latest
+        imagePullPolicy: Never
+        env:
+        - name: KAFKA_BROKER
+          value: "broker.kafka.svc.cluster.local:9092"
+        - name: SCHEMA_REGISTRY
+          value: "http://schema-registry.kafka.svc.cluster.local:8081"
+        command: ["sh", "-c", "ln -sf /data/config.properties /app/config.properties && java -jar /app/simservice.jar"]
+        ports:
+        - containerPort: 8080
+          hostPort: 8080
+        volumeMounts:
+        - name: simservice-data
+          mountPath: /data
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - pgrep -f simservice.jar || exit 1
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - pgrep -f simservice.jar && exit 0 || exit 1
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: simservice-data
+        persistentVolumeClaim:
+          claimName: simservice-data-pvc

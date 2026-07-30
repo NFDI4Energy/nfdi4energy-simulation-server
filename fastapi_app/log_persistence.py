@@ -140,15 +140,22 @@ def status_from_event(event: dict):
     event_code = event.get("event_code")
     metadata = event.get("metadata") or {}
 
-    if event_code == "TASK_COMPLETED":
+    if event_code in {"TASK_COMPLETED", "WRAPPER_COMPLETED"}:
         return "DONE", ""
-    if event_code == "TASK_FAILED":
+    if event_code in {
+        "TASK_FAILED",
+        "WRAPPER_FAILED",
+        "WRAPPER_JOB_FAILED",
+        "SIMULATION_FAILED",
+        "SCENARIO_REJECTED",
+        "SCENARIO_PARSE_FAILED",
+    }:
         return "ERROR", event.get("message", "")
     if category == "ERROR" and metadata.get("fatal") is True:
         return "ERROR", event.get("message", "")
     if event_code in {"TASK_STARTED", "SIMULATION_STARTED", "STEP_COMPLETED"}:
         return "RUNNING", ""
-    if event_code in {"TASK_ACCEPTED", "TASK_QUEUED"}:
+    if event_code in {"TASK_RECEIVED", "TASK_ACCEPTED", "TASK_QUEUED"}:
         return "PENDING", ""
 
     return None, None

@@ -5,6 +5,8 @@ import mimetypes
 import csv
 import math
 import asyncio
+import xml.etree.ElementTree as ET
+from functools import lru_cache
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from models import Scenario
@@ -20,7 +22,7 @@ from sqlalchemy.orm import Session
 from rabbitmq_client import SimulationQueue
 from database import init_db, get_db
 from auth import router as auth_router, require_login, get_current_user_or_none
-from log_persistence import persist_structured_event
+from log_persistence import persist_structured_event, status_from_event
 from models_db import User, Task
 
 
@@ -65,6 +67,12 @@ ENERGY_OBSERVABLES = [
     {"key": "bus.vm_pu.max", "label": "Max voltage", "unit": "p.u.", "default": True, "visualization": "card"},
     {"key": "line.loading_percent.max", "label": "Max line loading", "unit": "%", "default": True, "visualization": "card"},
     {"key": "load.p_mw.total", "label": "Total load", "unit": "MW", "default": True, "visualization": "line"},
+]
+
+TRAFFIC_OBSERVABLES = [
+    {"key": "vehicles.active", "label": "Active vehicles", "unit": "", "default": True, "visualization": "card"},
+    {"key": "speed.avg_mps", "label": "Average speed", "unit": "m/s", "default": True, "visualization": "card"},
+    {"key": "vehicles.arrived", "label": "Arrived", "unit": "", "default": True, "visualization": "line"},
 ]
 
 
@@ -349,15 +357,187 @@ def build_pandapower_network(task_id: str, history_index: Optional[int] = None) 
     return {"nodes": nodes, "edges": edges, "roads": []}
 
 
+def parse_sumo_shape(shape: Any) -> List[List[float]]:
+    if not isinstance(shape, str):
+        return []
+    points = []
+    for raw_point in shape.split():
+        coordinates = raw_point.split(",")
+        if len(coordinates) < 2:
+            continue
+        x = safe_float(coordinates[0])
+        y = safe_float(coordinates[1])
+        if x is not None and y is not None:
+            points.append([x, y])
+    return points
+
+
+@lru_cache(maxsize=64)
+def _load_sumo_roads(resources_root: str, task_id: str) -> tuple:
+    resources_dir = os.path.join(resources_root, task_id)
+    if not os.path.isdir(resources_dir):
+        return ()
+
+    for root, _, filenames in os.walk(resources_dir):
+        for filename in sorted(filenames):
+            if not filename.endswith(".net.xml"):
+                continue
+            try:
+                network_root = ET.parse(os.path.join(root, filename)).getroot()
+            except (OSError, ET.ParseError):
+                continue
+
+            roads = []
+            for edge in network_root.iter():
+                if edge.tag.rsplit("}", 1)[-1] != "edge":
+                    continue
+                edge_id = edge.get("id", "")
+                if not edge_id or edge_id.startswith(":") or edge.get("function") == "internal":
+                    continue
+
+                points = parse_sumo_shape(edge.get("shape"))
+                if not points:
+                    for child in edge:
+                        if child.tag.rsplit("}", 1)[-1] == "lane":
+                            points = parse_sumo_shape(child.get("shape"))
+                            if points:
+                                break
+                if len(points) >= 2:
+                    roads.append({"id": edge_id, "points": points})
+            if roads:
+                return tuple((road["id"], tuple(tuple(point) for point in road["points"])) for road in roads)
+    return ()
+
+
+def load_sumo_roads(task_id: str) -> List[dict]:
+    return [
+        {"id": road_id, "points": [list(point) for point in points]}
+        for road_id, points in _load_sumo_roads(RESOURCES_DIR, task_id)
+    ]
+
+
+def traffic_bounds(roads: List[dict], metric_events: List[dict]) -> Optional[tuple]:
+    bounds = [math.inf, math.inf, -math.inf, -math.inf]
+
+    def include(x: Any, y: Any):
+        numeric_x = safe_float(x)
+        numeric_y = safe_float(y)
+        if numeric_x is None or numeric_y is None:
+            return
+        bounds[0] = min(bounds[0], numeric_x)
+        bounds[1] = min(bounds[1], numeric_y)
+        bounds[2] = max(bounds[2], numeric_x)
+        bounds[3] = max(bounds[3], numeric_y)
+
+    for road in roads:
+        for point in road.get("points", []):
+            if isinstance(point, list) and len(point) >= 2:
+                include(point[0], point[1])
+
+    # A SUMO network normally establishes stable bounds. This fallback keeps
+    # history playback stable when only vehicle telemetry is available.
+    if not roads:
+        for event in metric_events:
+            for entity in event_metadata(event).get("entities", []):
+                if isinstance(entity, dict):
+                    include(entity.get("x"), entity.get("y"))
+
+    if math.isinf(bounds[0]):
+        return None
+    return tuple(bounds)
+
+
+def project_traffic_point(x: Any, y: Any, bounds: Optional[tuple]) -> Optional[List[float]]:
+    numeric_x = safe_float(x)
+    numeric_y = safe_float(y)
+    if numeric_x is None or numeric_y is None or bounds is None:
+        return None
+    min_x, min_y, max_x, max_y = bounds
+    projected_x = 50.0 if max_x == min_x else 5.0 + 90.0 * (numeric_x - min_x) / (max_x - min_x)
+    projected_y = 50.0 if max_y == min_y else 95.0 - 90.0 * (numeric_y - min_y) / (max_y - min_y)
+    return [round(max(0.0, min(100.0, projected_x)), 2), round(max(0.0, min(100.0, projected_y)), 2)]
+
+
+def build_sumo_projection(task_id: str, metric_events: List[dict], selected_event: dict) -> tuple:
+    raw_roads = load_sumo_roads(task_id)
+    bounds = traffic_bounds(raw_roads, metric_events)
+    roads = []
+    for road in raw_roads:
+        points = [project_traffic_point(point[0], point[1], bounds) for point in road["points"]]
+        roads.append({"id": road["id"], "points": [point for point in points if point is not None]})
+
+    entities = []
+    raw_entities = event_metadata(selected_event).get("entities", [])
+    if isinstance(raw_entities, list):
+        for raw_entity in raw_entities:
+            if not isinstance(raw_entity, dict):
+                continue
+            position = project_traffic_point(raw_entity.get("x"), raw_entity.get("y"), bounds)
+            if position is None:
+                continue
+            entities.append({**raw_entity, "x": position[0], "y": position[1]})
+
+    return {"nodes": [], "edges": [], "roads": roads}, entities
+
+
+def task_scenario_domain(task_id: str) -> Optional[str]:
+    resources_dir = task_input_dir(task_id)
+    if not os.path.isdir(resources_dir):
+        return None
+    for filename in sorted(os.listdir(resources_dir)):
+        if not filename.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(resources_dir, filename), "r", encoding="utf-8") as source:
+                candidate = json.load(source)
+        except (OSError, json.JSONDecodeError):
+            continue
+        blocks = candidate.get("buildingBlocks") if isinstance(candidate, dict) else None
+        if not isinstance(blocks, list):
+            continue
+        domains = [block.get("domain") for block in blocks if isinstance(block, dict)]
+        if "traffic" in domains:
+            return "traffic"
+        if "energy" in domains:
+            return "energy"
+    return None
+
+
+def monitor_domain(task_id: str, metric_events: List[dict], structured_events: List[dict]) -> str:
+    for event in reversed(metric_events):
+        domain = event_metadata(event).get("domain")
+        if domain in {"energy", "traffic"}:
+            return domain
+    for event in reversed(structured_events):
+        if str(event.get("component", "")).lower() == "sumowrapper":
+            return "traffic"
+    return task_scenario_domain(task_id) or "energy"
+
+
 def event_metadata(event: dict) -> dict:
     metadata = event.get("metadata")
     return metadata if isinstance(metadata, dict) else {}
 
 
-def frontend_event(event: dict) -> dict:
+def event_time_seconds(event: dict, domain: Optional[str] = None) -> Any:
+    value = event.get("simulation_time", 0)
+    numeric = safe_float(value)
+    if numeric is None:
+        return value
+    metadata = event_metadata(event)
+    event_domain = domain or metadata.get("domain")
+    if event_domain is None and str(event.get("component", "")).lower() == "sumowrapper":
+        event_domain = "traffic"
+    time_unit = metadata.get("simulation_time_unit")
+    if time_unit == "ms" or (event_domain == "traffic" and time_unit != "s"):
+        return numeric / 1000.0
+    return numeric
+
+
+def frontend_event(event: dict, domain: Optional[str] = None) -> dict:
     return {
         **event,
-        "time": event.get("simulation_time", 0),
+        "time": event_time_seconds(event, domain),
         "level": event_level(event),
         "source": event.get("component") or event.get("source") or "SimService",
     }
@@ -514,12 +694,8 @@ async def check_task(
     if db_task is None:
         return JSONResponse(content={"error": "Task not found or access denied"}, status_code=404)
 
-    data = redis_client.hgetall(f"task:{task_id}")
-
-    if not data:
-        return JSONResponse(content={"status": "NOT_FOUND"}, status_code=404)
-
-    status = data[b"status"].decode()
+    runtime = resolved_task_status(task_id, db_task.status or "PENDING")
+    status = runtime["status"]
     response = {"task_id": task_id, "status": status}
 
     if status == "DONE":
@@ -534,7 +710,7 @@ async def check_task(
         response["files"] = files
         response["downloads"] = [f"/download/{task_id}/{f}" for f in files]
     elif status == "ERROR":
-        response["error"] = data.get(b"error", b"").decode()
+        response["error"] = runtime["error"]
 
     return JSONResponse(content=response)
 
@@ -615,21 +791,83 @@ async def monitor_failed_events(
     )
 
 
-def task_runtime_status(task_id: str) -> Dict[str, str]:
-    redis_data = redis_client.hgetall(f"task:{task_id}")
+def task_runtime_status(task_id: str) -> Dict[str, Any]:
+    try:
+        redis_data = redis_client.hgetall(f"task:{task_id}")
+    except redis.RedisError:
+        redis_data = {}
     status = redis_data.get(b"status", b"PENDING").decode() if redis_data else "PENDING"
     error = redis_data.get(b"error", b"").decode() if redis_data else ""
-    return {"status": status, "error": error}
+    return {"status": status, "error": error, "redis_found": bool(redis_data)}
+
+
+def reconcile_runtime_status(runtime: Dict[str, Any], events: List[dict]) -> Dict[str, Any]:
+    """Fold durable lifecycle events over Redis, which may lag after a worker restart."""
+    reconciled = dict(runtime)
+    for event in events:
+        status, error = status_from_event(event)
+        if status:
+            reconciled["status"] = status
+            reconciled["error"] = error or ""
+    return reconciled
+
+
+def has_legacy_result_artifacts(task_id: str) -> bool:
+    """Recognize completed runs created before structured terminal events existed."""
+    results_dir = task_results_dir(task_id)
+    if not os.path.isdir(results_dir):
+        return False
+
+    ignored_directories = {"events", "debug", "logs"}
+    for root, directories, filenames in os.walk(results_dir):
+        relative_root = os.path.relpath(root, results_dir)
+        if relative_root == ".":
+            directories[:] = [name for name in directories if name not in ignored_directories]
+        for filename in filenames:
+            if filename == ".simservice-write-test":
+                continue
+            path = os.path.join(root, filename)
+            if os.path.isfile(path) and os.path.getsize(path) > 0:
+                return True
+    return False
+
+
+def resolved_task_status(
+    task_id: str,
+    fallback_status: str = "PENDING",
+    events: Optional[List[dict]] = None,
+) -> Dict[str, Any]:
+    runtime = task_runtime_status(task_id)
+    if not runtime.get("redis_found"):
+        runtime["status"] = fallback_status or "PENDING"
+
+    if events is None:
+        events_path = os.path.join(task_results_dir(task_id), "events", "structured_events.jsonl")
+        events = read_jsonl(events_path)
+    resolved = reconcile_runtime_status(runtime, events)
+    if resolved["status"] in {"PENDING", "UNKNOWN"} and has_legacy_result_artifacts(task_id):
+        resolved["status"] = "DONE"
+        resolved["error"] = ""
+
+    if not runtime.get("redis_found") and resolved["status"] in {"DONE", "ERROR", "RUNNING"}:
+        try:
+            redis_client.hset(
+                f"task:{task_id}",
+                mapping={"status": resolved["status"], "error": resolved["error"], "files": "[]"},
+            )
+        except redis.RedisError:
+            pass
+    return resolved
 
 
 def build_monitor_payload(task_id: str, cursor: int = 0, history_index: Optional[int] = None) -> dict:
-    runtime = task_runtime_status(task_id)
-    status = runtime["status"]
-    error = runtime["error"]
-
     events_dir = os.path.join(task_results_dir(task_id), "events")
     structured_events = read_jsonl(os.path.join(events_dir, "structured_events.jsonl"))
     metric_events = read_jsonl(os.path.join(events_dir, "metrics.jsonl"))
+    runtime = resolved_task_status(task_id, events=structured_events)
+    status = runtime["status"]
+    error = runtime["error"]
+    domain = monitor_domain(task_id, metric_events, structured_events)
 
     playback_count = len(metric_events) or csv_row_count(os.path.join(task_results_dir(task_id), "bus_vm_pu.csv"))
     selected_metric_index = clamp_index(history_index, playback_count)
@@ -638,19 +876,18 @@ def build_monitor_payload(task_id: str, cursor: int = 0, history_index: Optional
     metrics = event_metadata(selected_metric_event).get("metrics", {})
     metric_history = [
         {
-            "time": event.get("simulation_time", index),
+            "time": event_time_seconds(event, domain),
             "values": event_metadata(event).get("metrics", {}),
         }
         for index, event in enumerate(metric_events)
     ]
 
     latest_event = structured_events[-1] if structured_events else {}
-    simulation_time = selected_metric_event.get("simulation_time")
-    if simulation_time is None:
-        simulation_time = latest_event.get("simulation_time")
-    if simulation_time is None and latest_metric_event:
-        simulation_time = latest_metric_event.get("simulation_time")
-    if simulation_time is None and selected_metric_index is not None:
+    simulation_time_event = selected_metric_event if selected_metric_event.get("simulation_time") is not None else latest_event
+    if simulation_time_event.get("simulation_time") is None and latest_metric_event:
+        simulation_time_event = latest_metric_event
+    simulation_time = event_time_seconds(simulation_time_event, domain)
+    if simulation_time_event.get("simulation_time") is None and selected_metric_index is not None:
         simulation_time = selected_metric_index
     simulation_time = simulation_time or 0
 
@@ -659,7 +896,7 @@ def build_monitor_payload(task_id: str, cursor: int = 0, history_index: Optional
         metadata = event_metadata(event)
         total_steps = metadata.get("total_steps")
         step = metadata.get("step")
-        event_time = event.get("simulation_time")
+        event_time = event_time_seconds(event, domain)
         if isinstance(total_steps, int) and isinstance(step, int) and step >= 0 and isinstance(event_time, (int, float)):
             step_length = event_time / step if step else event_time or 1
             simulation_end = total_steps * step_length
@@ -668,16 +905,31 @@ def build_monitor_payload(task_id: str, cursor: int = 0, history_index: Optional
         simulation_end = max(simulation_time, 1)
 
     visible_events = structured_events[cursor:] if cursor > 0 else structured_events[-80:]
-    frontend_events = [frontend_event(event) for event in visible_events]
+    frontend_events = [frontend_event(event, domain) for event in visible_events]
 
+    selected_metadata = event_metadata(selected_metric_event)
+    selected_step = safe_int(selected_metadata.get("step"))
+    selected_total_steps = safe_int(selected_metadata.get("total_steps"))
     selected_progress = selected_metric_event.get("progress")
+    if domain == "traffic" and selected_step is not None and selected_total_steps:
+        selected_progress = selected_step / selected_total_steps
     if selected_progress is None and playback_count > 1 and selected_metric_index is not None:
         selected_progress = selected_metric_index / (playback_count - 1)
 
+    if domain == "traffic":
+        network, entities = build_sumo_projection(task_id, metric_events, selected_metric_event)
+        observables = TRAFFIC_OBSERVABLES
+        title = "SUMO traffic run"
+    else:
+        network = build_pandapower_network(task_id, selected_metric_index)
+        entities = []
+        observables = ENERGY_OBSERVABLES
+        title = "Simulation run"
+
     snapshot = {
         "taskId": task_id,
-        "domain": "energy",
-        "title": "Simulation run",
+        "domain": domain,
+        "title": title,
         "status": status,
         "simulationTime": simulation_time,
         "simulationStart": 0,
@@ -692,10 +944,10 @@ def build_monitor_payload(task_id: str, cursor: int = 0, history_index: Optional
         "snapshot": snapshot,
         "metrics": metrics,
         "metricHistory": metric_history[-80:],
-        "entities": [],
-        "network": build_pandapower_network(task_id, selected_metric_index),
+        "entities": entities,
+        "network": network,
         "events": frontend_events,
-        "observables": ENERGY_OBSERVABLES,
+        "observables": observables,
         "playback": {
             "index": selected_metric_index if selected_metric_index is not None else 0,
             "count": playback_count,
@@ -832,14 +1084,12 @@ async def my_tasks(
 
     result = []
     for t in tasks:
-        # Also fetch real-time status from Redis
-        redis_data = redis_client.hgetall(f"task:{t.id}")
-        redis_status = redis_data.get(b"status", b"UNKNOWN").decode() if redis_data else "UNKNOWN"
+        runtime = resolved_task_status(t.id, t.status or "PENDING")
 
         result.append({
             "task_id": t.id,
             "scenario_id": t.scenario_id,
-            "status": redis_status,
+            "status": runtime["status"],
             "created_at": t.created_at.isoformat() if t.created_at else None,
         })
 

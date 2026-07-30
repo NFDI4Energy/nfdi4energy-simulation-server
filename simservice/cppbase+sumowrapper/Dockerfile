@@ -96,6 +96,7 @@ RUN cd /build/libserdes && \
     rm -f config.cache config.h Makefile.config && \
     chmod +x configure && \
     ./configure --prefix=/usr/local --CFLAGS="-fPIC" --CXXFLAGS="-fPIC" && \
+    sed -i 's/--std=c++11/--std=c++17/g' Makefile.config && \
     make -j$(nproc) && \
     make install && \
     ldconfig

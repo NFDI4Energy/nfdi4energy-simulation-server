@@ -458,31 +458,9 @@ data:
   RESOURCES_DIR: /data/resources
   KAFKA_BOOTSTRAP_SERVERS: broker.kafka.svc.cluster.local:9092
   LOG_EVENT_TOPIC: simservice.logs.events
-  DATABASE_URL: postgresql://simserver:***REMOVED_SECRET***@postgres.simservice.svc.cluster.local:5432/simserver
   OIDC_CLIENT_ID: nfdi4energy-simaas_uol_de
   OIDC_DISCOVERY_URL: https://regapp.nfdi-aai.de/oidc/realms/nfdi/.well-known/openid-configuration
   OIDC_REDIRECT_URI: https://localhost:5001/auth/callback
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: web-secret
-  namespace: simservice
-type: Opaque
-stringData:
-  OIDC_CLIENT_SECRET: ***REMOVED_SECRET***
-  SESSION_SECRET: ***REMOVED_SECRET***
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: postgres-secret
-  namespace: simservice
-type: Opaque
-stringData:
-  POSTGRES_USER: simserver
-  POSTGRES_PASSWORD: ***REMOVED_SECRET***
-  POSTGRES_DB: simserver
 
 ---
 apiVersion: apps/v1

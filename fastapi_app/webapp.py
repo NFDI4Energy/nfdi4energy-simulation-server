@@ -29,7 +29,9 @@ from models_db import User, Task
 REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
 RESULTS_DIR = os.environ.get("RESULTS_DIR", "/data/results")
 RESOURCES_DIR = os.environ.get("RESOURCES_DIR", "/data/resources")
-SESSION_SECRET = os.environ.get("SESSION_SECRET", "***REMOVED_SECRET***")
+SESSION_SECRET = os.environ.get("SESSION_SECRET")
+if not SESSION_SECRET:
+    raise RuntimeError("SESSION_SECRET must be configured")
 
 redis_client = redis.Redis(host=REDIS_HOST, port=6379, db=0)
 

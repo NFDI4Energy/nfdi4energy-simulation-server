@@ -77,22 +77,28 @@ git clone https://github.com/NFDI4Energy/nfdi4energy-simulation-server
 cd simulation-server
 ```
 
-2. **Start the stack**
+2. **Configure the local environment**
+```bash
+cp .env.example .env
+```
+Fill in the OIDC credentials, database password, and session secret in `.env`.
+
+3. **Start the stack**
 Run the following command to build the images and start the services (FastAPI, RabbitMQ, Redis, and a generic example worker):
 ```bash
 docker-compose up -d --build
 ```
 
-3. **Access the Web Interface**
+4. **Access the Web Interface**
 Open `http://localhost:5001` in your browser. You can upload a scenario file (JSON) to queue a new task.
 
-4. **Monitor the Worker**
+5. **Monitor the Worker**
 Check the logs of the example worker to see it process the queue:
 ```bash
 docker-compose logs -f example_worker
 ```
 
-5. **Stop the stack**
+6. **Stop the stack**
 ```bash
 docker-compose down
 ```

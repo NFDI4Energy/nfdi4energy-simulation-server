@@ -9,11 +9,11 @@ services:
       - REDIS_HOST=localhost
       - RESULTS_DIR=/data/results
       - RESOURCES_DIR=/data/resources
-      - DATABASE_URL=postgresql://simserver:***REMOVED_SECRET***@localhost:5433/simserver
-      - OIDC_CLIENT_ID=nfdi4energy-simaas_uol_de
-      - OIDC_CLIENT_SECRET=***REMOVED_SECRET***
+      - DATABASE_URL=postgresql://simserver:${DB_PASSWORD:?set DB_PASSWORD in .env}@localhost:5433/simserver
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:?set OIDC_CLIENT_ID in .env}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:?set OIDC_CLIENT_SECRET in .env}
       - OIDC_DISCOVERY_URL=https://regapp.nfdi-aai.de/oidc/realms/nfdi/.well-known/openid-configuration
-      - SESSION_SECRET=***REMOVED_SECRET***
+      - SESSION_SECRET=${SESSION_SECRET:?set SESSION_SECRET in .env}
     depends_on:
       - redis
       - rabbitmq
@@ -26,7 +26,7 @@ services:
     image: postgres:15
     environment:
       - POSTGRES_USER=simserver
-      - POSTGRES_PASSWORD=***REMOVED_SECRET***
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?set DB_PASSWORD in .env}
       - POSTGRES_DB=simserver
     ports:
       - "5433:5432"

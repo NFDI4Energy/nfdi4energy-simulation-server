@@ -10,6 +10,8 @@ FASTAPI_DIR = os.path.dirname(os.path.dirname(__file__))
 if FASTAPI_DIR not in sys.path:
     sys.path.insert(0, FASTAPI_DIR)
 
+os.environ.setdefault("SESSION_SECRET", "test-session-secret")
+
 import webapp
 
 

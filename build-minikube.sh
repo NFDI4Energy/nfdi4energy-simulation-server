@@ -105,7 +105,7 @@ fi
 
 [[ $# -eq 0 ]] || fail "Unknown argument: $1"
 
-for command_name in minikube kubectl docker npm python3; do
+for command_name in git minikube kubectl docker npm python3; do
     require_command "${command_name}"
 done
 
@@ -135,6 +135,10 @@ current_context="$(kubectl config current-context 2>/dev/null || true)"
 log "Using Minikube profile ${PROFILE}"
 eval "$(minikube -p "${PROFILE}" docker-env --shell bash)"
 docker info >/dev/null
+
+log "Initializing source dependencies"
+git -C "${ROOT_DIR}" submodule sync --recursive
+git -C "${ROOT_DIR}" submodule update --init --recursive
 
 log "Building frontend assets"
 npm --prefix "${ROOT_DIR}/frontend" ci

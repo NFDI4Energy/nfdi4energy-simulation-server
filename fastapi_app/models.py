@@ -31,7 +31,7 @@ class Scenario(BaseModel):
     translators: list
     projectors: list
 
-    @root_validator()
+    @root_validator(skip_on_failure=True)
     def validate_simulation_steps(cls, values):
         start = values.get('simulationStart')
         end = values.get('simulationEnd')

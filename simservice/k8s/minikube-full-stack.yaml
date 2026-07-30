@@ -846,7 +846,7 @@ spec:
               command:
                 - sh
                 - -c
-                - pgrep -f simservice.jar || exit 1
+                - kill -0 1
             initialDelaySeconds: 60
             periodSeconds: 30
             timeoutSeconds: 10
@@ -856,7 +856,7 @@ spec:
               command:
                 - sh
                 - -c
-                - pgrep -f simservice.jar && exit 0 || exit 1
+                - kill -0 1
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5

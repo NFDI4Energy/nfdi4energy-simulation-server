@@ -177,6 +177,21 @@ public class KubernetesJobExecutor extends Thread {
         return env;
     }
 
+    private String buildWrapperLaunchCommand() {
+        String normalizedType = type.toLowerCase().replaceAll("[^a-z0-9]", "");
+        String setup = "ln -sf /data/config.properties /app/config.properties && "
+            + (taskId != null && !taskId.isEmpty() ? "mkdir -p \"$RESULTS_DIR\" && " : "");
+        String taskArgument = taskId != null && !taskId.isEmpty() ? " \"$TASK_ID\"" : "";
+
+        if (normalizedType.equals("sumowrapper")) {
+            return setup + "exec /app/SumoWrapper \"$SCENARIO_ID\" \"$INSTANCE_ID\"" + taskArgument;
+        }
+        if (normalizedType.equals("pandapowerwrapper")) {
+            return setup + "exec python /app/pandapowerWrapper.py \"$SCENARIO_ID\" \"$INSTANCE_ID\"" + taskArgument;
+        }
+        return setup + "exec java -jar /app/wrapper.jar \"$SCENARIO_ID\" \"$INSTANCE_ID\"" + taskArgument;
+    }
+
     /**
      * Create the Kubernetes Job specification
      */
@@ -216,7 +231,7 @@ public class KubernetesJobExecutor extends Thread {
                             .withName("wrapper")
                             .withImage(getContainerImage())
                             .withImagePullPolicy("Never")
-                            .withCommand("sh", "-c", "ln -sf /data/config.properties /app/config.properties && " + (taskId != null && !taskId.isEmpty() ? "mkdir -p \"$RESULTS_DIR\" && " : "") + "java -jar /app/wrapper.jar " + scenarioID + " " + instanceID + (taskId != null && !taskId.isEmpty() ? " " + taskId : ""))
+                            .withCommand("sh", "-c", buildWrapperLaunchCommand())
                             .addAllToEnv(envMap.entrySet().stream()
                                 .map(e -> new EnvVarBuilder()
                                     .withName(e.getKey())

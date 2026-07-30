@@ -211,9 +211,8 @@ public class SimulationService
 							} catch (Exception e) {
 								logger.error("Error when commiting. " + e.getMessage());
 								publishStatus("Error when commiting. " +e.getMessage());	
-								if(exitOnFailure) {
-									MAINLOOP_STOPPED.set(true);
-								}
+								// Rebalances can invalidate an offset commit temporarily. The next
+								// poll rejoins the group; active RabbitMQ jobs must keep running.
 							}
 						}
 					int killed = ScenarioManager.monitorRunningScenarios();

@@ -60,11 +60,13 @@ public class SimulationEventEmitter {
         try {
             File eventDir = new File(getResultsDir(), taskId + "/events");
             eventDir.mkdirs();
+            eventDir.setWritable(true, false);
             File eventFile = new File(eventDir, "structured_events.jsonl");
             try (BufferedWriter writer = new BufferedWriter(new FileWriter(eventFile, true))) {
                 writer.write(payload);
                 writer.newLine();
             }
+            eventFile.setWritable(true, false);
         } catch (Exception e) {
             logger.warn("Failed to append structured event for task " + taskId + ": " + e.getMessage());
         }

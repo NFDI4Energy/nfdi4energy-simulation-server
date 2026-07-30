@@ -460,8 +460,10 @@ async def submit_simulation(
     task_id = str(uuid.uuid4())
     task_resources_dir = task_input_dir(task_id)
     task_results_path = task_results_dir(task_id)
-    os.makedirs(task_resources_dir, exist_ok=True)
-    os.makedirs(task_results_path, exist_ok=True)
+    os.makedirs(task_resources_dir, mode=0o777, exist_ok=True)
+    os.makedirs(task_results_path, mode=0o777, exist_ok=True)
+    os.chmod(task_resources_dir, 0o777)
+    os.chmod(task_results_path, 0o777)
     create_task_event(task_id, "PROGRESS", "WebService", "TASK_ACCEPTED", "Simulation task accepted", 0.01)
 
     # 3. Save scenario file

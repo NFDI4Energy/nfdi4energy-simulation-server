@@ -771,6 +771,7 @@ spec:
             - -c
             - |
               mkdir -p /data/logs /data/definitions/domains /data/definitions/layers /data/definitions/components /data/definitions/connectors /data/definitions/resources /data/resources /data/results /data/certs
+              chmod -R a+rwX /data/logs /data/resources /data/results 2>/dev/null || true
               cp /config/config.properties /data/config.properties
           volumeMounts:
             - name: simservice-data

@@ -70,7 +70,9 @@ def validate_event(event: dict) -> Tuple[bool, str]:
 
 
 def append_jsonl_once(path: str, row: dict, id_field: str = "id") -> bool:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    parent = os.path.dirname(path)
+    os.makedirs(parent, mode=0o777, exist_ok=True)
+    os.chmod(parent, 0o777)
     row_id = row.get(id_field)
 
     if row_id and os.path.isfile(path):
@@ -80,6 +82,7 @@ def append_jsonl_once(path: str, row: dict, id_field: str = "id") -> bool:
 
     with open(path, "a", encoding="utf-8") as f:
         f.write(json.dumps(row, separators=(",", ":")) + "\n")
+    os.chmod(path, 0o666)
     return True
 
 

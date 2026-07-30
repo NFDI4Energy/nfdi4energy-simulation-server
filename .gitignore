@@ -4,3 +4,7 @@
 __pycache__/
 *.db
 certs/
+
+# Runtime task data mounted into Minikube.
+/data/resources/*/
+/data/results/*/

@@ -8,35 +8,66 @@ In 2025, it has been relicensed under the MIT License (https://choosealicense.co
 */
 #include "SumoWrapper.h"
 
-
+#include <cstdlib>
+#include <filesystem>
 
 #ifndef TESTSWITCH
 int main(int argc, char** argv) {
     //check arguments
-    if (argc < 2) {
-        cout << "usage: SumoWrapper Scenarioid SUMOid" << endl;
-        return 0;
+    if (argc < 3) {
+        cout << "usage: SumoWrapper Scenarioid SUMOid [task_id]" << endl;
+        return 1;
     }
-    //look for Config file
+
+    std::string configPath;
+    const char* configuredPath = std::getenv("CONFIG_PATH");
+    if (configuredPath != nullptr && configuredPath[0] != '\0') {
+        configPath = configuredPath;
+    } else if (std::filesystem::exists("/data/config.properties")) {
+        configPath = "/data/config.properties";
+    }
+
+    // Load wrapper defaults first, then overlay mounted cluster configuration.
     if (!daceDS::Config::getInstance()->readConfig(CONFIG_PROPERTIES)) {
         cout << "Config not found under " << CONFIG_PROPERTIES << "! Exiting..." << endl;
-        return 0;
+        return 1;
+    }
+    if (!configPath.empty() && !daceDS::Config::getInstance()->readConfig(configPath)) {
+        cout << "Config override not found under " << configPath << "! Exiting..." << endl;
+        return 1;
     }
 
     std::string scenarioID = argv[1];
     std::string simulatorID = argv[2];
+    std::string taskId;
+    if (argc > 3) {
+        taskId = argv[3];
+    } else if (const char* environmentTaskId = std::getenv("TASK_ID")) {
+        taskId = environmentTaskId;
+    }
 
-    cout << "SumoWrapper started with sceID=" << scenarioID << " and simID=" << simulatorID << endl;
+    cout << "SumoWrapper started with sceID=" << scenarioID << ", simID=" << simulatorID;
+    if (!taskId.empty()) {
+        cout << ", taskID=" << taskId;
+    }
+    cout << endl;
 
     daceDS::Config::getInstance()->setScenarioID(scenarioID);
     daceDS::Config::getInstance()->setSimulatorID(simulatorID);
+    std::filesystem::create_directories(daceDS::Config::getInstance()->getOutputDir());
+    std::filesystem::create_directories(daceDS::Config::getInstance()->getLogDir());
 
-    daceDS::SumoWrapper wrapper(scenarioID, simulatorID);
+    daceDS::SumoWrapper wrapper(scenarioID, simulatorID, taskId);
 
-    cout << "running wrapper" << endl;
-    wrapper.runWrapper();
-    cout << "terminating wrapper" << endl;
-    wrapper.terminateWrapper();
+    try {
+        cout << "running wrapper" << endl;
+        wrapper.runWrapper();
+    } catch (const std::exception& error) {
+        wrapper.emitEvent("ERROR", "WRAPPER_FAILED", std::string("SUMO wrapper failed: ") + error.what(), 1.0, -1, true);
+        std::cerr << "SUMO wrapper failed: " << error.what() << std::endl;
+        return 1;
+    }
+    return 0;
 }
 #endif
 
@@ -55,6 +86,9 @@ void daceDS::SumoWrapper::runWrapper() {
     std::vector<std::string> pubTopics2;
     statusProducer->init(host, pubTopics2, "status");
     KDEBUG("statusProducer init");
+
+    eventEmitter = std::make_shared<SimulationEventEmitter>(taskId, statusProducer, Config::getInstance()->getOutputDir());
+    emitEvent("WRAPPER", "WRAPPER_STARTED", "SUMO wrapper started", 0.20);
 
     statusMsg("started");
 
@@ -93,9 +127,11 @@ void daceDS::SumoWrapper::runWrapper() {
     scenarioTopics.push_back(scenarioTopic);
     scenarioConsumer.subscribe(host, scenarioTopics, Constants::STR_SCENARIO_CONSUMER, "");
     statusMsg("(waiting for scenario description...)");
+    emitEvent("WRAPPER", "CONFIG_WAIT_STARTED", "Waiting for SUMO scenario configuration");
     auto sce = provision->waitForScenario();
     auto sim = provision->getSim();
     scenarioConsumer.stop();
+    emitEvent("WRAPPER", "CONFIG_RECEIVED", "SUMO scenario configuration received");
 
     //fetch resources
     //this needs to happen after scenario definition was received, otherwise we don't now which resources we need to save
@@ -106,10 +142,12 @@ void daceDS::SumoWrapper::runWrapper() {
     resourceTopics.push_back(resourceTopic);
     resourceConsumer.subscribe(host, resourceTopics, Constants::STR_PROVISION_CONSUMER);
     statusMsg("(waiting for resources...)");
+    emitEvent("SIMULATION", "RESOURCE_WAIT_STARTED", "Waiting for SUMO resources");
     provision->waitForResources();
     cout << "(waiting for resources...)" << endl;
     resourceConsumer.stop();
     cout << "(waiting for resources DONE)" << endl;
+    emitEvent("SIMULATION", "RESOURCE_READY", "SUMO resources are ready");
 
 
     //convert map and generate config files
@@ -301,8 +339,10 @@ void daceDS::SumoWrapper::runWrapper() {
     cout << "WEITER" << endl;
 
     KINFO("Starting SimulationController");
+    emitEvent("PROGRESS", "SIMULATION_STARTED", "SUMO simulation started", 0.20, sce->simulationStart * 1000);
     ctrl->run();
     KINFO("SimulationController done");
+    emitEvent("SIMULATION", "SIMULATION_COMPLETED", "SUMO simulation completed", 0.90, sce->simulationEnd * 1000);
 
     terminateWrapper();
 }
@@ -314,11 +354,13 @@ void daceDS::SumoWrapper::terminateWrapper() {
    
     usleep(3*1000*1000);
 
+    emitEvent("RESULT", "RESULT_EXPORT_STARTED", "Exporting SUMO results", 0.92);
     auto resultsProducer = std::make_shared<KafkaProducer>(true);
     std::vector<std::string> pubTopics;
     resultsProducer->init(Config::getInstance()->get("kafkaBroker"), pubTopics, "results");
 
     PrepareRun::sendResults(Config::getInstance()->getScenarioID(), provision->getSim(), resultsProducer);
+    emitEvent("RESULT", "RESULT_EXPORT_COMPLETED", "SUMO results exported", 0.98);
     statusMsg("finished");
     usleep(10*1000*1000);
     
@@ -330,12 +372,14 @@ void daceDS::SumoWrapper::terminateWrapper() {
     orchestrationConsumer->stop();
 
     KINFO("bye bye");
+    emitEvent("WRAPPER", "WRAPPER_COMPLETED", "SUMO wrapper completed", 1.0);
     exit(0);  // important: may be called from other places
 }
 
 /* do not interacit with simservice anymore */
 void daceDS::SumoWrapper::killWrapper() {
     KERROR("exiting abruptly");
+    emitEvent("ERROR", "WRAPPER_FAILED", "SUMO wrapper terminated unexpectedly", 1.0, -1, true);
     //cleanUp(); delete folders and files
     ctrl->close();
     provisionConsumer->stop();
@@ -349,4 +393,38 @@ void daceDS::SumoWrapper::killWrapper() {
 
 void daceDS::SumoWrapper::statusMsg(std::string msg){
     statusProducer->publish(Config::getInstance()->getOrchestrationTopic(TOPIC_STATUSMSG), simulatorID+": "+msg);
+}
+
+void daceDS::SumoWrapper::emitEvent(
+    const std::string& category,
+    const std::string& eventCode,
+    const std::string& message,
+    double progress,
+    int64_t simulationTime,
+    bool fatal) {
+    if (eventEmitter) {
+        eventEmitter->emit(category, eventCode, message, progress, simulationTime, fatal);
+    }
+}
+
+void daceDS::SumoWrapper::emitMetricSnapshot(
+    int64_t simulationTime,
+    double progress,
+    int step,
+    int totalSteps,
+    int activeVehicles,
+    int arrivedVehicles,
+    double averageSpeed,
+    const std::vector<SumoVehicleSnapshot>& vehicles) {
+    if (eventEmitter) {
+        eventEmitter->metricSnapshot(
+            simulationTime,
+            progress,
+            step,
+            totalSteps,
+            activeVehicles,
+            arrivedVehicles,
+            averageSpeed,
+            vehicles);
+    }
 }

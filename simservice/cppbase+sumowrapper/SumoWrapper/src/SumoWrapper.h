@@ -24,8 +24,10 @@ In 2025, it has been relicensed under the MIT License (https://choosealicense.co
 #include <memory>
 #include <regex>
 #include <string>
+#include <utility>
 
 #include "PrepareRun.h"
+#include "SimulationEventEmitter.h"
 #include "api/InteractionImpl.h"
 #include "api/OrchestrationImpl.h"
 #include "api/ProvisionImpl.h"
@@ -59,10 +61,13 @@ class SumoWrapper : public SimulationWrapper {
     std::shared_ptr<SumoSimulationControl> ctrl;
     std::shared_ptr<KafkaProducer> producer;
     std::shared_ptr<KafkaProducer> statusProducer;
+    std::shared_ptr<SimulationEventEmitter> eventEmitter;
+    std::string taskId;
     int sumoPID = 0;
     
    public:
-    SumoWrapper(std::string s, std::string t) : SimulationWrapper(s, t){};
+    SumoWrapper(std::string s, std::string t, std::string taskId = "")
+        : SimulationWrapper(s, t), taskId(std::move(taskId)){};
     ~SumoWrapper(){};
 
     std::shared_ptr<ProvisionImpl> getProvision() { return provision; };
@@ -73,6 +78,22 @@ class SumoWrapper : public SimulationWrapper {
     void terminateWrapper();
 
     void statusMsg(std::string msg);
+    void emitEvent(
+        const std::string& category,
+        const std::string& eventCode,
+        const std::string& message,
+        double progress = -1.0,
+        int64_t simulationTime = -1,
+        bool fatal = false);
+    void emitMetricSnapshot(
+        int64_t simulationTime,
+        double progress,
+        int step,
+        int totalSteps,
+        int activeVehicles,
+        int arrivedVehicles,
+        double averageSpeed,
+        const std::vector<SumoVehicleSnapshot>& vehicles);
 
 };
 

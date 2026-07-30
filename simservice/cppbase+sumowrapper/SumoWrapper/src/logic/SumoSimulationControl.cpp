@@ -8,7 +8,26 @@ In 2025, it has been relicensed under the MIT License (https://choosealicense.co
 */
 
 #include "SumoSimulationControl.h"
+
+#ifndef USING_TRACI
+#include <libsumo/Simulation.h>
+#endif
+
 using namespace daceDS;
+
+namespace {
+int integerParameter(const std::map<std::string, std::string>& parameters, const std::string& key, int fallback, int minimum) {
+    auto value = parameters.find(key);
+    if (value == parameters.end()) {
+        return fallback;
+    }
+    try {
+        return std::max(minimum, std::stoi(value->second));
+    } catch (...) {
+        return fallback;
+    }
+}
+}
 
 void SumoSimulationControl::init(std::shared_ptr<Producer> p, std::shared_ptr<SumoWrapper> w, std::shared_ptr<ProvisionImpl> prov, int port, std::shared_ptr<ProvisionHandler> ph) {
     SimulationControl::init(p, w, ph);
@@ -53,7 +72,7 @@ void SumoSimulationControl::processDescription() {
         // for (std::string ss : sumoConnection->getRespLinks()) {
         //     KDEBUG(ss << ", ");
         // }
-    } else {
+    } else if (!sumoConnection->getResponsibleForWholeMap()) {
         sumoConnection->setResponsibleForWholeMap(false);
         KDEBUG("ATTENTION! Haven't got a single resonsibility :-(");
     }
@@ -106,8 +125,19 @@ void SumoSimulationControl::run() {
     }
 
     int64_t stepLengthMS = provision->getSim()->stepLength;
+    if (stepLengthMS <= 0) {
+        throw std::runtime_error("SUMO stepLength must be greater than zero");
+    }
     int64_t simEndMS = provision->getScenario()->simulationEnd * 1000;
     int64_t simStartMS = provision->getScenario()->simulationStart * 1000;
+    int64_t simulationDurationMS = std::max<int64_t>(0, simEndMS - simStartMS);
+    int totalSteps = stepLengthMS > 0
+        ? static_cast<int>((simulationDurationMS + stepLengthMS - 1) / stepLengthMS)
+        : 0;
+    int monitorIntervalSteps = integerParameter(provision->getSim()->parameters, "monitorIntervalSteps", 1, 1);
+    int monitorMaxVehicles = integerParameter(provision->getSim()->parameters, "monitorMaxVehicles", 200, 0);
+    int stepDelayMs = integerParameter(provision->getSim()->parameters, "stepDelayMs", 0, 0);
+    int arrivedVehicles = 0;
 
 
 
@@ -122,8 +152,9 @@ void SumoSimulationControl::run() {
     //first step
     wrapper->timeSync->timeAdvance(stepLengthMS);
 
-    int64_t simulatorTimeMs = 0;
-    int64_t lbts = stepLengthMS;
+    int64_t simulatorTimeMs = simStartMS;
+    int64_t lbts = simStartMS + stepLengthMS;
+    int stepIndex = 0;
 
     #ifdef DSTRAFFIC_MEASURE_DBG
         std::ofstream csvFile(Config::getInstance()->getLogDir()+"measurements_"+provision->getScenario()->scenarioID+"_"+provision->getSim()->instanceID+".csv");
@@ -205,6 +236,65 @@ void SumoSimulationControl::run() {
         #endif
         // std::cout << "observe\n";
         runObservers(simulatorTimeMs);       
+
+        try {
+        std::vector<std::string> vehicleIds;
+        int64_t observedAt = simulatorTimeMs;
+        sumoConnection->vehicle->getList(vehicleIds, observedAt);
+
+        double speedTotal = 0.0;
+        std::vector<SumoVehicleSnapshot> vehicleSnapshots;
+        vehicleSnapshots.reserve(std::min<int>(monitorMaxVehicles, vehicleIds.size()));
+        for (const auto& vehicleId : vehicleIds) {
+            try {
+                datamodel::Micro vehicle;
+                int64_t vehicleTime = simulatorTimeMs;
+                sumoConnection->vehicle->getVehicle(vehicleId, vehicle, vehicleTime);
+                speedTotal += vehicle.speed;
+                if (static_cast<int>(vehicleSnapshots.size()) < monitorMaxVehicles) {
+                    SumoVehicleSnapshot snapshot;
+                    snapshot.id = vehicle.vehicleID;
+                    snapshot.x = vehicle.position.x;
+                    snapshot.y = vehicle.position.y;
+                    snapshot.speed = vehicle.speed;
+                    snapshot.edge = vehicle.edge;
+                    snapshot.status = vehicle.speed < 0.5 ? "slow" : "moving";
+                    vehicleSnapshots.push_back(std::move(snapshot));
+                }
+            } catch (const std::exception& error) {
+                KDEBUG("Unable to sample vehicle " << vehicleId << ": " << error.what());
+            }
+        }
+
+        #ifndef USING_TRACI
+            arrivedVehicles += static_cast<int>(libsumo::Simulation::getArrivedIDList().size());
+        #endif
+
+        bool shouldEmitSnapshot = stepIndex % monitorIntervalSteps == 0 || stepIndex + 1 >= totalSteps;
+        if (shouldEmitSnapshot) {
+            double averageSpeed = vehicleIds.empty() ? 0.0 : speedTotal / vehicleIds.size();
+            double simulationFraction = simulationDurationMS > 0
+                ? static_cast<double>(simulatorTimeMs - simStartMS) / simulationDurationMS
+                : 1.0;
+            double progress = 0.20 + 0.70 * std::min(1.0, simulationFraction);
+            std::dynamic_pointer_cast<SumoWrapper>(wrapper)->emitMetricSnapshot(
+                simulatorTimeMs,
+                progress,
+                stepIndex + 1,
+                totalSteps,
+                static_cast<int>(vehicleIds.size()),
+                arrivedVehicles,
+                averageSpeed,
+                vehicleSnapshots);
+        }
+        } catch (const std::exception& error) {
+            KDEBUG("Unable to collect SUMO monitor snapshot: " << error.what());
+        }
+
+        if (stepDelayMs > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(stepDelayMs));
+        }
+        stepIndex++;
         
         #ifdef DSTRAFFIC_MEASURE_DBG
             auto endObs = std::chrono::high_resolution_clock::now();

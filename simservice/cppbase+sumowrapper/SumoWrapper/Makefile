@@ -13,7 +13,7 @@ LDFLAGS   = -L/home/mohamed/Desktop/DaceDS/DaceDS4energy-main/CppBaseWrapper/lib
              -L$(SUMO_HOME)/bin -ltracicpp
 
 # Libraries to link
-LDLIBS = -lsimwrapper -lpugixml -lsumocpp -ltracicpp
+LDLIBS = -lsimwrapper -lpugixml -lsumocpp -ltracicpp -ljansson
 
 # Paths
 SRC_DIR   = src
@@ -23,6 +23,7 @@ OBJ_DIR   = obj
 # Source files
 SRCS = \
     $(SRC_DIR)/PrepareRun.cpp \
+    $(SRC_DIR)/SimulationEventEmitter.cpp \
     $(SRC_DIR)/SumoWrapper.cpp \
     $(SRC_DIR)/api/InteractionImpl.cpp \
     $(SRC_DIR)/api/OrchestrationImpl.cpp \
@@ -58,4 +59,3 @@ clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR)/SumoWrapper
 
 .PHONY: all clean
-

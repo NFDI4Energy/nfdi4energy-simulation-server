@@ -12,10 +12,11 @@ CPPFLAGS := \
 	-I$(SUMO_HOME)/include
 CXXFLAGS := -fPIC -DRTI_USES_STD_FSTREAM -fpermissive -std=c++17 -w -O2
 LDFLAGS := -L$(CPPBASE_DIR)/lib -L/usr/local/lib -L$(SUMO_HOME)/lib -pthread
-LDLIBS := -lsimwrapper -lpugixml -lsumocpp -ltracicpp
+LDLIBS := -lsimwrapper -lpugixml -lsumocpp -ltracicpp -ljansson
 
 SRCS := \
 	$(SRC_DIR)/PrepareRun.cpp \
+	$(SRC_DIR)/SimulationEventEmitter.cpp \
 	$(SRC_DIR)/SumoWrapper.cpp \
 	$(SRC_DIR)/api/InteractionImpl.cpp \
 	$(SRC_DIR)/api/OrchestrationImpl.cpp \

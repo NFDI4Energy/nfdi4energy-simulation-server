@@ -1,27 +1,7 @@
 # Minikube full stack for the simulation server + simservice.
 #
-# Before applying, build local images inside Minikube's Docker daemon:
-#
-#   eval "$(minikube docker-env)"
-#   docker build -t simaas-web:latest ./fastapi_app
-#   docker build -t simservice/simservice:latest ./simservice
-#
-# Keep the host data folder mounted while the stack is running:
-#
-#   minikube mount "$(pwd)/data:/data"
-#
-# Apply:
-#
-#   kubectl apply -f simservice/k8s/minikube-full-stack.yaml
-#
-# Access examples:
-#
-#   kubectl -n simservice port-forward svc/web 5001:5001
-#
-# Notes:
-# - The simservice controller creates per-scenario wrapper Jobs dynamically.
-#   Build those wrapper images separately as simservice/<type>-wrapper:latest.
-# - The web app keeps HTTPS enabled and expects /data/certs/key.pem + /data/certs/cert.pem.
+# Use ./build-minikube.sh from the repository root to build every local image,
+# populate the required Secrets, and apply this manifest.
 
 ---
 apiVersion: v1
@@ -458,7 +438,6 @@ data:
   RESOURCES_DIR: /data/resources
   KAFKA_BOOTSTRAP_SERVERS: broker.kafka.svc.cluster.local:9092
   LOG_EVENT_TOPIC: simservice.logs.events
-  OIDC_CLIENT_ID: nfdi4energy-simaas_uol_de
   OIDC_DISCOVERY_URL: https://regapp.nfdi-aai.de/oidc/realms/nfdi/.well-known/openid-configuration
   OIDC_REDIRECT_URI: https://localhost:5001/auth/callback
 

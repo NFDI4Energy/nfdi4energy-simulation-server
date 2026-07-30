@@ -20,6 +20,7 @@ kubectl -n simservice create secret generic postgres-secret \
   | kubectl apply -f -
 
 kubectl -n simservice create secret generic web-secret \
+  --from-literal=OIDC_CLIENT_ID="${OIDC_CLIENT_ID}" \
   --from-literal=OIDC_CLIENT_SECRET="${OIDC_CLIENT_SECRET}" \
   --from-literal=SESSION_SECRET="${SESSION_SECRET}" \
   --from-literal=DATABASE_URL="postgresql://simserver:${DB_PASSWORD}@postgres.simservice.svc.cluster.local:5432/simserver" \
@@ -29,6 +30,5 @@ kubectl -n simservice create secret generic web-secret \
 kubectl apply -f simservice/k8s/minikube-full-stack.yaml
 ```
 
-The OIDC client identifier is non-secret configuration and remains in the
-`web-config` ConfigMap. Keep `.env` local; use `.env.example` as the list of
-required values.
+Keep `.env` local; use `.env.example` as the list of required values. The root
+`build-minikube.sh` script performs these steps and builds all local images.

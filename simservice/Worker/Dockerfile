@@ -17,14 +17,9 @@ FROM maven:3.8.6-openjdk-11 AS builder
 
 WORKDIR /build
 
-COPY --from=basewrapper-builder /root/.m2/repository/eu/fau/cs7/daceDS/JavaBaseWrapper /root/.m2/repository/eu/fau/cs7/daceDS/JavaBaseWrapper
+COPY --from=basewrapper-builder /root/.m2/repository /root/.m2/repository
 COPY --from=basewrapper-builder /root/.m2/settings.xml /root/.m2/settings.xml
 COPY pom.xml .
-
-RUN mvn dependency:go-offline -B \
-    -Dmaven.wagon.http.retryHandler.count=3 \
-    -Dmaven.wagon.http.readTimeout=30000 \
-    -Dmaven.wagon.http.connectionTimeout=15000 || true
 
 COPY src ./src
 

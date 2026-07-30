@@ -16,11 +16,19 @@
 #include "Config.h"
 
 #include <exception>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 
 namespace daceDS {
 Config* Config::inst = 0;
+
+namespace {
+std::string environmentValue(const char* name) {
+    const char* value = std::getenv(name);
+    return value == nullptr ? "" : value;
+}
+}
 
 Config::Config() {}
 
@@ -46,19 +54,35 @@ std::string Config::getSimulatorID() {
 }
 
 std::string Config::getBaseDir() {
+    std::string resultsDir = environmentValue("RESULTS_DIR");
+    if (!resultsDir.empty()) {
+        return resultsDir;
+    }
     std::cout << "rootDir: " << get("rootDir") << std::endl;
     return get("rootDir") + "/" + getScenarioID() + "/" + getSimulatorID();
 }
 
 std::string Config::getResourceDir() {
+    std::string resourcesDir = environmentValue("RESOURCES_DIR");
+    if (!resourcesDir.empty()) {
+        return resourcesDir;
+    }
     return getBaseDir() + "/resource";
 }
 
 std::string Config::getOutputDir() {
+    std::string resultsDir = environmentValue("RESULTS_DIR");
+    if (!resultsDir.empty()) {
+        return resultsDir;
+    }
     return getBaseDir() + "/output";
 }
 
 std::string Config::getLogDir() {
+    std::string resultsDir = environmentValue("RESULTS_DIR");
+    if (!resultsDir.empty()) {
+        return resultsDir + "/logs/";
+    }
     // return get("logDir") + "/" + getScenarioID() + "/" + getSimulatorID() + "/";
     return get("logDir") + "/";
 }
@@ -67,8 +91,10 @@ bool Config::readConfig(std::string path) {
     try {
         KDEBUG("Reading from " << path);
         std::ifstream infile(path);
+        if (!infile.is_open()) {
+            return false;
+        }
         std::string line;
-        configParamMap.clear();
         while (std::getline(infile, line)) {
             //skip comments
             if (line.size() > 0 && line[0] == '#')
@@ -108,6 +134,20 @@ bool Config::readConfig(std::string path) {
 }
 
 std::string Config::get(std::string key) {
+    static const std::map<std::string, const char*> environmentKeys = {
+        {"kafkaBroker", "KAFKA_BROKER"},
+        {"schemaRegistry", "SCHEMA_REGISTRY"},
+        {"channelOrchestration", "CHANNEL_ORCHESTRATION"},
+        {"channelInteraction", "CHANNEL_INTERACTION"},
+        {"channelProvision", "CHANNEL_PROVISION"},
+    };
+    auto environmentKey = environmentKeys.find(key);
+    if (environmentKey != environmentKeys.end()) {
+        std::string value = environmentValue(environmentKey->second);
+        if (!value.empty()) {
+            return value;
+        }
+    }
     return configParamMap[key];
 }
 

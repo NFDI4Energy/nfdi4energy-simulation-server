@@ -34,6 +34,7 @@ std::string PrepareRun::createSumoConf(std::shared_ptr<datamodel::Scenario> sce,
     std::string defaultConfString = buffer.str();
 
     std::vector<std::string> additionalFileVec;
+    std::vector<std::string> routeFileVec;
     //first additionals;
     //todo: overwrite global input/map ?
     //instance's resources
@@ -70,10 +71,11 @@ std::string PrepareRun::createSumoConf(std::shared_ptr<datamodel::Scenario> sce,
             KDEBUG("id is already a relative id");
         }
 
-        //only if path not already present
-        if (std::find(additionalFileVec.begin(), additionalFileVec.end(), fid) == additionalFileVec.end()) {
-            additionalFileVec.push_back(fid);
-            KDEBUG("adding " << fid << "  traffic input");
+        // SUMO route files are not additional files and must be configured
+        // through route-files so routes and flows are loaded correctly.
+        if (std::find(routeFileVec.begin(), routeFileVec.end(), fid) == routeFileVec.end()) {
+            routeFileVec.push_back(fid);
+            KDEBUG("adding " << fid << " as traffic route input");
 
         } else {
             KDEBUG("ignoring resource " << fid << " cause already present");
@@ -81,7 +83,8 @@ std::string PrepareRun::createSumoConf(std::shared_ptr<datamodel::Scenario> sce,
     }
 
 
-    KDEBUG("collected " << additionalFileVec.size() << " files for the additional field: ");
+    KDEBUG("collected " << additionalFileVec.size() << " additional files and "
+        << routeFileVec.size() << " route files");
 
     //bring all together
     bool firstFile = true;
@@ -95,8 +98,20 @@ std::string PrepareRun::createSumoConf(std::shared_ptr<datamodel::Scenario> sce,
     }
     KDEBUG(additionalFiles);
 
+    firstFile = true;
+    std::string routeFiles = "";
+    for (auto s : routeFileVec) {
+        if (!firstFile) {
+            routeFiles += ",";
+        }
+        firstFile = false;
+        routeFiles += s;
+    }
+    KDEBUG(routeFiles);
+
     KDEBUG("replacing the {ADD} section of config file with that string");
     defaultConfString.replace(defaultConfString.find("{ADD}"), std::string("{ADD}").size(), additionalFiles);
+    defaultConfString.replace(defaultConfString.find("{ROUTES}"), std::string("{ROUTES}").size(), routeFiles);
     KDEBUG("done replacing");
 
     //results
@@ -105,6 +120,10 @@ std::string PrepareRun::createSumoConf(std::shared_ptr<datamodel::Scenario> sce,
     for (std::pair<std::string, std::string> res : sim->results) {
         auto outputType = res.first;
         auto outputPath = res.second;
+
+        if (outputType == "summary") {
+            outputType = "summary-output";
+        }
 
         if (!validOutput(outputType)) {
             KDEBUG("Ignoring requested result: " << outputType);
@@ -229,7 +248,7 @@ bool PrepareRun::validOutput(std::string item) {
                                            "full-output",
                                            "statistic-output",
                                            "person-summary-output",
-                                           "summary",
+                                           "summary-output",
                                            //    "collision-output",
                                            "stop-output",
                                            "vehroute-output",

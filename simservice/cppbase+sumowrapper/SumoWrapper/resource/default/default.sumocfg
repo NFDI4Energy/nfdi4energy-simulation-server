@@ -2,6 +2,7 @@
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.sf.net/xsd/sumoConfiguration.xsd">
     <input>
         <net-file value="{NET}"/>
+        <route-files value="{ROUTES}"/>
         <additional-files value="{ADD}"/>
     </input>
 
@@ -11,9 +12,9 @@
         <end value="{END}"/>   
     </time>
 
-    <!--<output>
+    <output>
         {OUTPUT}
-    </output>-->
+    </output>
 
     <processing>
         <lateral-resolution value="0.1"/>

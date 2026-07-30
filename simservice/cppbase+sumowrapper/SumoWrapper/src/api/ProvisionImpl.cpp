@@ -18,7 +18,7 @@ std::vector<std::string> Provision::methods = {
  * ******************/
 
 void ProvisionImpl::scenario(ProvisionTopicMetadata& pmeta, datamodel::Scenario& scenario) {
-    std:cout << "\n\nIN SCENARIO\n\n" << std::endl;
+    std::cout << "\n\nIN SCENARIO\n\n" << std::endl;
     if (Config::getInstance()->getScenarioID() != scenario.scenarioID) {
         KERROR("ERROR scenarioIDs must not change " << Config::getInstance()->getScenarioID() << " --> " << scenario.scenarioID);
         exit(EXIT_FAILURE);
@@ -140,7 +140,7 @@ void ProvisionImpl::resource(ProvisionTopicMetadata& pmeta, datamodel::ResourceF
     }
 
     //get destination path
-    std::string destinationPath = Config::getInstance()->get("rootDir") + "/" + Config::getInstance()->getScenarioID() + "/" + Config::getInstance()->getSimulatorID() + "/resource/" + rf.ID;
+    std::string destinationPath = Config::getInstance()->getResourceDir() + "/" + rf.ID;
     KDEBUG("destination is " << destinationPath);
 
     //we have two cases: file is embedded directly or there is only a reference

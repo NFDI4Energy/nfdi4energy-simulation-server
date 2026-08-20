@@ -46,5 +46,46 @@ services:
     networks:
       - sim_network
 
+  mosaik-gui:
+    image: registry.gitlab.com/mosaik/mosaik-gui/mosaik-gui:99-build-and-push-docker-images
+    ports:
+      - "0.0.0.0:8002:80"
+    depends_on:
+      - mosaik-orbit
+    networks:
+      - sim_network
+    environment:
+      - MOSAIK_ORBIT_PROXY_HOST=mosaik-orbit
+      - MOSAIK_ORBIT_PORT=8442
+
+  mosaik-orbit:
+    image: registry.gitlab.com/mosaik/mosaik-gui/mosaik-orbit:99-build-and-push-docker-images
+    expose:
+      - "8442"
+    environment:
+      - MOSAIK_ORBIT_HOST=0.0.0.0
+      - MOSAIK_ORBIT_PORT=8442
+    networks:
+      - sim_network
+
+  mosaik-worker:
+    build:
+      context: .
+      dockerfile: mosaik/mosaik-worker/Dockerfile
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - REDIS_HOST=redis
+      - MOSAIK_WS_URL=ws://mosaik-orbit:8442
+      - RESULTS_DIR=/data/results
+      - RESOURCES_DIR=/data/resources
+    depends_on:
+      - redis
+      - rabbitmq
+      - mosaik-orbit
+    volumes:
+      - ./data:/data
+    networks:
+      - sim_network
+
 networks:
   sim_network:

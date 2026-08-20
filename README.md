@@ -42,7 +42,7 @@ sequenceDiagram
 
     Client->>FastAPI: POST /submit (Scenario Files)
     FastAPI->>SharedVolume: Save files to /data/resources/{task_id}/
-    FastAPI->>RabbitMQ: Publish task_id & scenario JSON to 'simulation_requests'
+    FastAPI->>RabbitMQ: Publish task_id & scenario JSON to '{framework}_requests'
     FastAPI->>Redis: SET task:{task_id} status:PENDING
     FastAPI-->>Client: Return {task_id}
 
@@ -101,13 +101,67 @@ docker-compose down
 
 To use your own simulation logic, modify or replace `task_queue/example_worker.py`. The fundamental requirements for a worker are:
 
-1. **Listen to RabbitMQ**: Subscribe to the `simulation_requests` queue.
+1. **Listen to RabbitMQ**: Subscribe to the framework-specific queue (e.g., `dacedsx_requests`, `mosaik_requests`).
 2. **Read Inputs**: Access user-uploaded files from `RESOURCES_DIR/{task_id}/`.
 3. **Execute**: Run your computationally heavy task, model execution, or custom code.
 4. **Write Outputs**: Save the resulting data/reports to `RESULTS_DIR/{task_id}/`.
 5. **Update State**: Update the `Redis` status token (`task:{task_id}`) to `DONE` and acknowledge the RabbitMQ message.
 
 The FastAPI web service will automatically detect any new files saved to `RESULTS_DIR /{task_id}/` and serve them as downloadable links to the client.
+
+## Adding a New Framework
+
+The server supports multiple simulation frameworks via a handler factory in `fastapi_app/rabbitmq_client.py`. Each framework is implemented as a subclass of `SimulationHandler`.
+
+### Handler Structure
+
+| Method | Purpose |
+|---|---|
+| `publish(task_id, scenario, queue)` | Publish the task message to the framework's RabbitMQ queue |
+| `parse_scenario(files)` | Parse uploaded files into a scenario dict |
+| `get_resources_dir(task_id)` | Return the directory where input files are stored |
+| `get_redis_fields()` | Extra fields to store in Redis (must include `"framework"`) |
+
+### Steps to Add a Framework
+
+**1. Declare the queue** — in `SimulationQueue.__init__`:
+
+```python
+self.channel.queue_declare(queue="myframework_requests", durable=True)
+```
+
+**2. Create a handler** — subclass `SimulationHandler` in `rabbitmq_client.py`:
+
+```python
+class MyFrameworkSimulationHandler(SimulationHandler):
+    @property
+    def framework_name(self) -> str:
+        return "myframework"
+    # publish, parse_scenario, get_resources_dir, get_redis_fields inherited from parent
+    # Override any of these if the default behavior doesn't fit.
+```
+
+**3. Register the handler** — in the `HANDLERS` dict:
+
+```python
+HANDLERS = {
+    "dacedsx": DaceDSXSimulationHandler(),
+    "mosaik": MosaikSimulationHandler(),
+    "myframework": MyFrameworkSimulationHandler(),
+}
+```
+
+No changes to `webapp.py` are needed — the endpoint dispatches entirely through `get_handler(framework)`.
+
+**Usage:**
+
+```
+POST /submit?framework=myframework
+```
+
+### Worker Requirement
+
+Each framework needs a corresponding worker that subscribes to its queue (e.g., `myframework_requests`) and reads input files from the directory returned by `get_resources_dir(task_id)`.
 
 ## License
 

@@ -46,27 +46,27 @@ services:
     networks:
       - sim_network
 
-  mosaik-orbit:
-    image: registry.gitlab.com/mosaik/mosaik-gui/backend:99-build-and-push-docker-images
-    expose:
-      - "${MOSAIK_ORBIT_PORT:-8442}"
-    environment:
-      - MOSAIK_ORBIT_HOST=${MOSAIK_ORBIT_HOST:-0.0.0.0}
-      - MOSAIK_ORBIT_PORT=${MOSAIK_ORBIT_PORT:-8442}
-    networks:
-      - sim_network
-
   mosaik-gui:
-    image: registry.gitlab.com/mosaik/mosaik-gui/frontend:99-build-and-push-docker-images
+    image: registry.gitlab.com/mosaik/mosaik-gui/mosaik-gui:99-build-and-push-docker-images
     ports:
-      - "0.0.0.0:${FRONTEND_HOST_PORT:-8080}:80"
+      - "0.0.0.0:8002:80"
     depends_on:
       - mosaik-orbit
     networks:
       - sim_network
     environment:
-      - MOSAIK_ORBIT_PROXY_HOST=${MOSAIK_ORBIT_PROXY_HOST:-mosaik-orbit}
-      - MOSAIK_ORBIT_PORT=${MOSAIK_ORBIT_PORT:-8442}
+      - MOSAIK_ORBIT_PROXY_HOST=mosaik-orbit
+      - MOSAIK_ORBIT_PORT=8442
+
+  mosaik-orbit:
+    image: registry.gitlab.com/mosaik/mosaik-gui/mosaik-orbit:99-build-and-push-docker-images
+    expose:
+      - "8442"
+    environment:
+      - MOSAIK_ORBIT_HOST=0.0.0.0
+      - MOSAIK_ORBIT_PORT=8442
+    networks:
+      - sim_network
 
   mosaik-worker:
     build:

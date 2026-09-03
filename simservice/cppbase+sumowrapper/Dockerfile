@@ -75,9 +75,21 @@ RUN wget https://github.com/fmtlib/fmt/archive/refs/tags/10.2.1.tar.gz && \
 # ============================================
 # Stage 4: Install SUMO v1.21.0
 # ============================================
-RUN wget https://github.com/eclipse/sumo/archive/refs/tags/v1_21_0.tar.gz && \
-    tar -xzf v1_21_0.tar.gz && \
-    cd sumo-1_21_0 && \
+#RUN wget https://github.com/eclipse/sumo/archive/refs/tags/v1_21_0.tar.gz && \
+#    tar -xzf v1_21_0.tar.gz && \
+#    cd sumo-1_21_0 && \
+#    rm -rf build && \
+#    mkdir -p build && cd build && \
+#    cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sumo -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON && \
+ #   make -j$(nproc) && \
+ #   make install
+
+# ============================================
+# Stage 4: Install SUMO v1.27.1
+# ============================================
+RUN wget https://github.com/eclipse-sumo/sumo/archive/refs/tags/v1_27_1.tar.gz && \
+    tar -xzf v1_27_1.tar.gz && \
+    cd sumo-1_27_1 && \
     rm -rf build && \
     mkdir -p build && cd build && \
     cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sumo -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON && \
@@ -105,10 +117,20 @@ RUN cd /build/libserdes && \
 # Stage 6: Build cppkafka
 # ============================================
 COPY CppBaseWrapper/cppkafka /build/cppkafka
+
+RUN echo "=== CMakeLists.txt ===" && \
+    grep -n "add_subdirectory" /build/cppkafka/CMakeLists.txt && \
+    echo "=== Disable tests ===" && \
+    grep -n "CPPKAFKA_DISABLE_TESTS" /build/cppkafka/CMakeLists.txt
+
 RUN cd /build/cppkafka && \
     rm -rf build && \
-    mkdir -p build && cd build && \
-    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON && \
+    mkdir build && cd build && \
+    cmake .. \
+      -DCMAKE_INSTALL_PREFIX=/usr/local \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+      -DCPPKAFKA_DISABLE_TESTS=ON && \
     make -j$(nproc) && \
     make install && \
     ldconfig

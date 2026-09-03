@@ -1,0 +1,24 @@
+[submodule "simservice/CppBaseWrapper/avro"]
+	path = simservice/CppBaseWrapper/avro
+	url = https://github.com/apache/avro.git
+[submodule "simservice/CppBaseWrapper/cppkafka"]
+	path = simservice/CppBaseWrapper/cppkafka
+	url = https://github.com/mfontanini/cppkafka.git
+[submodule "simservice/CppBaseWrapper/libserdes"]
+	path = simservice/CppBaseWrapper/libserdes
+	url = https://github.com/confluentinc/libserdes.git
+[submodule "simservice/CppBaseWrapper/pugixml"]
+	path = simservice/CppBaseWrapper/pugixml
+	url = https://github.com/zeux/pugixml.git
+[submodule "simservice/cppbase+sumowrapper/CppBaseWrapper/avro"]
+	path = simservice/cppbase+sumowrapper/CppBaseWrapper/avro
+	url = https://github.com/apache/avro.git
+[submodule "simservice/cppbase+sumowrapper/CppBaseWrapper/cppkafka"]
+	path = simservice/cppbase+sumowrapper/CppBaseWrapper/cppkafka
+	url = https://github.com/mfontanini/cppkafka.git
+[submodule "simservice/cppbase+sumowrapper/CppBaseWrapper/libserdes"]
+	path = simservice/cppbase+sumowrapper/CppBaseWrapper/libserdes
+	url = https://github.com/confluentinc/libserdes.git
+[submodule "simservice/cppbase+sumowrapper/CppBaseWrapper/pugixml"]
+	path = simservice/cppbase+sumowrapper/CppBaseWrapper/pugixml
+	url = https://github.com/zeux/pugixml.git

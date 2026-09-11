@@ -16,13 +16,18 @@
     loading = true;
     error = null;
     try {
-      const resp = await fetch('/my-tasks');
-      if (resp.ok) {
-        const data = await resp.json();
-        tasks = data.tasks || [];
-      } else {
-        error = 'Failed to load tasks';
-      }
+      let cursor = 0;
+      let data;
+      const loaded = new Map();
+      do {
+        const resp = await fetch(`/my-tasks?cursor=${cursor}`);
+        if (!resp.ok) throw new Error('Failed to load tasks');
+        data = await resp.json();
+        for (const task of data.tasks || []) loaded.set(task.task_id, task);
+        if (data.hasMore && data.cursor <= cursor) throw new Error('History pagination did not advance');
+        cursor = data.cursor;
+      } while (data.hasMore);
+      tasks = [...loaded.values()];
     } catch (e) {
       error = e.message;
     } finally {
@@ -114,7 +119,7 @@
                       <code class="detail-value">{task.task_id}</code>
                     </div>
                     {#if taskDetails[task.task_id]}
-                      {#if taskDetails[task.task_id].status === 'DONE' && taskDetails[task.task_id].downloads}
+                      {#if taskDetails[task.task_id].downloads?.length}
                         <div class="detail-field">
                           <span class="detail-label">Result Files</span>
                           <div class="file-links">

@@ -2,10 +2,9 @@
   import { onDestroy, onMount } from "svelte";
   import {
     getDefaultPinnedMetrics,
-    getMonitorDebug,
-    getMonitorSnapshot,
     getMockMonitorSnapshot,
   } from "./mockMonitorClient";
+  import { getMonitorDebug, getMonitorSnapshot } from "./monitorClient";
 
   export let taskId = null;
 
@@ -30,6 +29,12 @@
   let mounted = false;
   let loadedTaskId = null;
   let loadError = null;
+  let generation = null;
+  let requestVersion = 0;
+  let requestController = null;
+  let requestPending = false;
+  let playbackVersion = 0;
+  let debugController = null;
 
   $: snapshot = monitor?.snapshot;
   $: observables = monitor?.observables || [];
@@ -59,19 +64,20 @@
   $: visibleMetricMeta = observables.filter((metric) =>
     pinnedMetrics.includes(metric.key),
   );
-  $: progressPercent = snapshot
+  $: progressPercent = snapshot?.progress != null
     ? Math.min(100, Math.round(snapshot.progress * 100))
-    : 0;
+    : null;
   $: timelinePercent =
     playbackCount > 1
       ? Math.round((playbackIndex / Math.max(1, playbackCount - 1)) * 100)
-      : progressPercent;
+      : progressPercent ?? 0;
 
   $: isRealTask = Boolean(taskId);
 
   $: if (mounted && taskId !== loadedTaskId) {
     loadedTaskId = taskId;
     cursor = 0;
+    generation = null;
     selectedEntity = null;
     monitor = null;
     playbackIndex = 0;
@@ -97,33 +103,37 @@
   }
 
   async function loadNext(nextCursor = cursor, requestedHistoryIndex = followLatest ? null : playbackIndex) {
+    const version = ++requestVersion;
+    requestController?.abort();
+    requestController = new AbortController();
+    requestPending = true;
     try {
       loadError = null;
-      const previousEvents = monitor?.events || [];
+      const previousDomain = monitor?.snapshot?.domain;
       const nextMonitor = isRealTask
-        ? await getMonitorSnapshot(taskId, nextCursor, pinnedMetrics, requestedHistoryIndex)
+        ? await getMonitorSnapshot(taskId, nextCursor, pinnedMetrics, requestedHistoryIndex, { signal: requestController.signal, generation })
         : await getMockMonitorSnapshot(selectedRun, nextCursor, pinnedMetrics);
-      cursor = nextMonitor.cursor;
+      if (version !== requestVersion || !mounted) return;
+      if (requestedHistoryIndex === null) {
+        cursor = nextMonitor.reset ? nextMonitor.cursor : Math.max(cursor, nextMonitor.cursor);
+        generation = nextMonitor.generation || generation;
+      }
       playbackCount = nextMonitor.playback?.count || 0;
       playbackIndex = nextMonitor.playback?.index ?? playbackIndex;
       monitor = {
         ...nextMonitor,
-        events: isRealTask
-          ? mergeEvents(previousEvents, nextMonitor.events || [])
+        events: isRealTask && requestedHistoryIndex === null && !nextMonitor.reset
+          ? mergeEvents(monitor?.events || [], nextMonitor.events || [])
           : nextMonitor.events || [],
       };
-      if (!pinnedMetrics.length && nextMonitor.snapshot?.domain) {
+      if (nextMonitor.snapshot?.domain && previousDomain !== nextMonitor.snapshot.domain) {
         pinnedMetrics = getDefaultPinnedMetrics(nextMonitor.snapshot.domain);
       }
-      if (
-        selectedEntity &&
-        monitor.entities.length &&
-        !monitor.entities.some((entity) => entity.id === selectedEntity.id)
-      ) {
-        selectedEntity = null;
-      }
+      if (selectedEntity) selectedEntity = monitor.entities.find(entity => entity.id === selectedEntity.id) || null;
     } catch (error) {
-      loadError = error.message;
+      if (version === requestVersion && error.name !== 'AbortError') loadError = error.message;
+    } finally {
+      if (version === requestVersion) requestPending = false;
     }
   }
 
@@ -143,8 +153,9 @@
   function appendStreamEvent(payload) {
     if (!payload?.event) return;
     cursor = Math.max(cursor, payload.cursor || cursor);
+    generation = payload.generation || generation;
 
-    if (!monitor) return;
+    if (!monitor || !followLatest) return;
 
     monitor = {
       ...monitor,
@@ -155,11 +166,11 @@
 
   function startStream() {
     stopStream();
-    if (!isRealTask || !taskId || typeof EventSource === "undefined") return;
+    if (!mounted || !isRealTask || !taskId || typeof EventSource === "undefined") return;
 
     streamStatus = "connecting";
     eventSource = new EventSource(
-      `/monitor/${encodeURIComponent(taskId)}/stream?cursor=${cursor}`,
+      `/monitor/${encodeURIComponent(taskId)}/stream?cursor=${cursor}${generation ? `&generation=${encodeURIComponent(generation)}` : ''}`,
     );
 
     eventSource.addEventListener("ready", () => {
@@ -167,6 +178,13 @@
     });
     eventSource.addEventListener("heartbeat", () => {
       streamStatus = "live";
+    });
+    eventSource.addEventListener("reset", (message) => {
+      const reset = JSON.parse(message.data);
+      generation = reset.generation;
+      cursor = 0;
+      if (followLatest && monitor) monitor = { ...monitor, events: [] };
+      if (followLatest) loadNext(0);
     });
     eventSource.addEventListener("structured-event", (message) => {
       try {
@@ -177,7 +195,8 @@
       }
     });
     eventSource.onerror = () => {
-      stopStream("fallback");
+      // EventSource reconnects with Last-Event-ID; polling continues meanwhile.
+      streamStatus = "fallback";
     };
   }
 
@@ -192,7 +211,7 @@
   function startPolling() {
     stopPolling();
     pollTimer = setInterval(() => {
-      if (polling && !isPlaying) loadNext();
+      if (polling && !isPlaying && !requestPending && followLatest) loadNext();
     }, 1400);
   }
 
@@ -212,7 +231,7 @@
     const nextIndex = Math.max(0, Math.min(Number(index), maxPlaybackIndex()));
     followLatest = false;
     playbackIndex = nextIndex;
-    loadNext(cursor, nextIndex);
+    return loadNext(cursor, nextIndex);
   }
 
   function scrubPlayback(event) {
@@ -228,30 +247,38 @@
   function showLatest() {
     stopPlayback();
     followLatest = true;
+    if (monitor) monitor = { ...monitor, events: [] };
+    cursor = 0;
+    generation = null;
     loadNext(cursor, null);
   }
 
-  function startPlayback() {
+  async function startPlayback() {
     if (!isRealTask || playbackCount <= 1) return;
     followLatest = false;
     isPlaying = true;
+    const version = ++playbackVersion;
     if (playbackIndex >= maxPlaybackIndex()) {
       playbackIndex = 0;
-      loadNext(cursor, playbackIndex);
+      await loadNext(cursor, playbackIndex);
     }
-    if (playbackTimer) clearInterval(playbackTimer);
-    playbackTimer = setInterval(() => {
+    async function advance() {
+      if (!isPlaying || version !== playbackVersion) return;
       if (playbackIndex >= maxPlaybackIndex()) {
         stopPlayback();
         return;
       }
       const nextIndex = playbackIndex + 1;
       playbackIndex = nextIndex;
-      loadNext(cursor, nextIndex);
-    }, 700);
+      await loadNext(cursor, nextIndex);
+      if (loadError) { stopPlayback(); return; }
+      if (isPlaying && version === playbackVersion) playbackTimer = setTimeout(advance, 700);
+    }
+    if (isPlaying && version === playbackVersion) playbackTimer = setTimeout(advance, 700);
   }
 
   function stopPlayback() {
+    playbackVersion += 1;
     if (playbackTimer) {
       clearInterval(playbackTimer);
       playbackTimer = null;
@@ -268,11 +295,16 @@
   }
 
   async function loadDebugInfo() {
+    const requestedTask = taskId;
+    debugController?.abort();
+    debugController = new AbortController();
     debugLoadedFor = taskId;
     debugLoadError = null;
     try {
-      debugInfo = await getMonitorDebug(taskId);
+      const result = await getMonitorDebug(taskId, debugController.signal);
+      if (requestedTask === taskId && mounted) debugInfo = result;
     } catch (error) {
+      if (requestedTask !== taskId || error.name === 'AbortError') return;
       debugLoadError = error.message;
       debugInfo = { failedEvents: [], count: 0 };
     }
@@ -313,30 +345,40 @@
     return "flat";
   }
 
-  function sparklinePoints(key) {
+  function sparklineSegments(key) {
     const values = metricHistory
       .map((point) => point.values[key])
       .filter((value) => typeof value === "number");
-    if (values.length === 0) return "";
+    if (values.length === 0) return [];
     const min = Math.min(...values);
     const max = Math.max(...values);
     const span = max - min || 1;
-    return values
-      .map((value, index) => {
-        const x = values.length === 1 ? 50 : (index / (values.length - 1)) * 100;
+    const segments = [];
+    let segment = [];
+    metricHistory.forEach((point, index) => {
+        const value = point.values[key];
+        if (typeof value !== 'number') {
+          if (segment.length) segments.push(segment.join(' '));
+          segment = [];
+          return;
+        }
+        const x = metricHistory.length === 1 ? 50 : (index / (metricHistory.length - 1)) * 100;
         const y = 36 - ((value - min) / span) * 30;
-        return `${x},${y}`;
-      })
-      .join(" ");
+        segment.push(`${x},${y}`);
+      });
+    if (segment.length) segments.push(segment.join(' '));
+    return segments;
   }
 
   function nodeColor(voltage) {
+    if (voltage == null) return "#9ca3af";
     if (voltage < 0.98) return "#f59e0b";
     if (voltage > 1.035) return "#8b5cf6";
     return "#10b981";
   }
 
   function edgeColor(loading) {
+    if (loading == null) return "#9ca3af";
     if (loading > 85) return "#ef4444";
     if (loading > 70) return "#f59e0b";
     return "#499FAE";
@@ -347,7 +389,8 @@
   }
 
   function formatTime(seconds) {
-    return `${seconds}s`;
+    if (seconds == null) return "n/a";
+    return `${seconds}${snapshot?.timeUnit === 'scenario-unit' ? ' units' : 's'}`;
   }
 
   function formatEventSource(event) {
@@ -368,6 +411,10 @@
   });
 
   onDestroy(() => {
+    mounted = false;
+    requestVersion += 1;
+    requestController?.abort();
+    debugController?.abort();
     stopPolling();
     stopPlayback();
     stopStream();
@@ -414,7 +461,7 @@
       </div>
       <div class="header-stat">
         <span>Status</span>
-        <strong class="status {snapshot.status.toLowerCase()}">{snapshot.status}</strong>
+        <strong class="status {snapshot.status.toLowerCase()}" title={`Status source: ${snapshot.statusSource || 'demo'}`}>{snapshot.status}</strong>
       </div>
       <div class="header-stat">
         <span>Task</span>
@@ -426,14 +473,14 @@
       </div>
       <div class="header-stat">
         <span>Updated</span>
-        <strong>{new Date(snapshot.updatedAt).toLocaleTimeString()}</strong>
+        <strong>{snapshot.updatedAt ? new Date(snapshot.updatedAt).toLocaleTimeString() : 'n/a'}</strong>
       </div>
     </section>
 
     <section class="timeline-panel">
       <div class="timeline-meta">
         <span>{formatTime(snapshot.simulationStart)}</span>
-        <strong>{progressPercent}% · step {playbackCount ? playbackIndex + 1 : 0}/{playbackCount || 0}</strong>
+        <strong>{progressPercent == null ? 'n/a' : `${progressPercent}%`} · step {playbackCount ? playbackIndex + 1 : 0}/{playbackCount || 0}</strong>
         <span>{formatTime(snapshot.simulationEnd)}</span>
       </div>
       <div class="playback-controls">
@@ -459,6 +506,18 @@
       </label>
     </section>
 
+    {#if monitor.availability?.limitations?.length}
+      <details class="availability-info">
+        <summary>Data availability · {snapshot.statusSource || 'unknown'}</summary>
+        {#each monitor.availability.limitations as limitation}<p>{limitation}</p>{/each}
+      </details>
+    {/if}
+    {#if monitor.runEvents?.length}
+      <details class="availability-info">
+        <summary>Run-level events</summary>
+        {#each monitor.runEvents as event}<p>{formatEventSource(event)} {event.message}</p>{/each}
+      </details>
+    {/if}
     <div class="mode-tabs" role="tablist" aria-label="Run monitor mode">
       <button
         role="tab"
@@ -606,7 +665,7 @@
                   <span>{formatMetric(metrics[metric.key], metric.unit)}</span>
                 </div>
                 <svg viewBox="0 0 100 40" preserveAspectRatio="none">
-                  <polyline points={sparklinePoints(metric.key)} />
+                  {#each sparklineSegments(metric.key) as points}<polyline {points} />{/each}
                 </svg>
               </div>
             {/each}
@@ -960,6 +1019,15 @@
     color: var(--text-muted);
     font-size: 0.72rem;
   }
+
+  .availability-info {
+    margin: 8px 0;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    overflow-wrap: anywhere;
+  }
+  .availability-info summary { cursor: pointer; }
+  .availability-info p { margin: 6px 0; }
 
   .network-view,
   .traffic-view {

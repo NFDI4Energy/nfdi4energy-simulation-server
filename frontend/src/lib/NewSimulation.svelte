@@ -143,7 +143,7 @@
         submitResult = { success: true, taskId: data.task_id };
         startPolling(data.task_id);
       } else {
-        submitResult = { success: false, error: data.error || 'Submission failed' };
+        submitResult = { success: false, taskId: data.task_id, code: data.code, error: data.error || 'Submission failed' };
       }
     } catch (err) {
       submitResult = { success: false, error: err.message };
@@ -378,8 +378,11 @@
             </button>
           {:else}
             <div class="result-box error">
-              <strong>✗ Failed:</strong> {submitResult.error}
+              <strong>{submitResult.code === 'submission_outcome_unknown' ? 'Delivery unconfirmed:' : 'Submission failed:'}</strong> {submitResult.error}
             </div>
+            {#if submitResult.taskId}
+              <button class="monitor-link" on:click={() => openMonitor(submitResult.taskId)}>Open Monitor</button>
+            {/if}
           {/if}
         </section>
       {/if}
@@ -391,7 +394,7 @@
           <div class="status-display">
             <span class="status-badge {taskStatus.status.toLowerCase()}">{taskStatus.status}</span>
           </div>
-          {#if taskStatus.status === 'DONE' && taskStatus.downloads}
+          {#if taskStatus.downloads?.length}
             <div class="result-files">
               <h4>Result Files</h4>
               {#each taskStatus.downloads as url, i}

@@ -1,8 +1,11 @@
 package eu.fau.cs7.daceDS.SimService;
 
-import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -16,6 +19,7 @@ import eu.fau.cs7.daceDS.Kafka.ProducerImplKafka;
 public class SimulationEventEmitter {
     private static final Logger logger = Logger.getLogger(SimulationEventEmitter.class.getName());
     private static final String EVENT_TOPIC = "simservice.logs.events";
+    private static final Object FILE_WRITE_LOCK = new Object();
     private static ProducerImplKafka<String> producer;
 
     private final String taskId;
@@ -62,9 +66,19 @@ public class SimulationEventEmitter {
             eventDir.mkdirs();
             eventDir.setWritable(true, false);
             File eventFile = new File(eventDir, "structured_events.jsonl");
-            try (BufferedWriter writer = new BufferedWriter(new FileWriter(eventFile, true))) {
-                writer.write(payload);
-                writer.newLine();
+            File lockFile = new File(eventDir, ".writer.lock");
+            synchronized (FILE_WRITE_LOCK) {
+                try (FileChannel lockChannel = FileChannel.open(lockFile.toPath(),
+                        StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+                    lockFile.setWritable(true, false);
+                    try (FileLock lock = lockChannel.lock();
+                         FileChannel writer = FileChannel.open(eventFile.toPath(),
+                             StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND)) {
+                        ByteBuffer bytes = StandardCharsets.UTF_8.encode(payload + "\n");
+                        while (bytes.hasRemaining()) writer.write(bytes);
+                        writer.force(true);
+                    }
+                }
             }
             eventFile.setWritable(true, false);
         } catch (Exception e) {

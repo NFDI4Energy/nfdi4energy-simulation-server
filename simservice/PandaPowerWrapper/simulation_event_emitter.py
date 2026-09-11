@@ -1,5 +1,8 @@
 import json
+import fcntl
+import logging
 import os
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -7,6 +10,7 @@ from pathlib import Path
 
 class SimulationEventEmitter:
     EVENT_TOPIC = "simservice.logs.events"
+    _file_lock = threading.RLock()
 
     def __init__(self, task_id, source, component, producer=None, results_dir=None):
         self.task_id = task_id
@@ -37,10 +41,26 @@ class SimulationEventEmitter:
         if metadata is not None:
             event["metadata"] = metadata
 
-        self._append_jsonl("structured_events.jsonl", event)
-        if category == "METRIC":
-            self._append_jsonl("metrics.jsonl", event)
+        self._persist_event(event, category == "METRIC")
         self._publish(event)
+
+    def _persist_event(self, event, metric):
+        if not self.results_dir:
+            return
+        try:
+            directory = self.results_dir / "events"
+            directory.mkdir(parents=True, exist_ok=True)
+            with self._file_lock, (directory / ".writer.lock").open("a+b") as lock:
+                os.chmod(directory / ".writer.lock", 0o666)
+                fcntl.lockf(lock, fcntl.LOCK_EX)
+                try:
+                    self._append_jsonl("structured_events.jsonl", event)
+                    if metric:
+                        self._append_jsonl("metrics.jsonl", event)
+                finally:
+                    fcntl.lockf(lock, fcntl.LOCK_UN)
+        except OSError:
+            logging.getLogger(__name__).warning("Local event persistence failed; attempting Kafka", exc_info=True)
 
     def metric_snapshot(self, simulation_time, metrics, progress=None, metadata=None):
         meta = {"metrics": metrics}
@@ -62,6 +82,8 @@ class SimulationEventEmitter:
         event_dir.mkdir(parents=True, exist_ok=True)
         with (event_dir / name).open("a", encoding="utf-8") as f:
             f.write(json.dumps(event, separators=(",", ":")) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
 
     def _publish(self, event):
         if not self.producer:

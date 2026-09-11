@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 
-from database import Base
+from fastapi_app.persistence.database import Base
 
 
 def _uuid() -> str:

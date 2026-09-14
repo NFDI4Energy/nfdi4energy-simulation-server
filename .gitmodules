@@ -1,3 +1,0 @@
-[submodule "villas/node"]
-	path = villas/node
-	url = git@github.com:VILLASframework/node.git

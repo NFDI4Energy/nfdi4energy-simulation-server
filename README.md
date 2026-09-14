@@ -147,6 +147,7 @@ class MyFrameworkSimulationHandler(SimulationHandler):
 HANDLERS = {
     "dacedsx": DaceDSXSimulationHandler(),
     "mosaik": MosaikSimulationHandler(),
+    "villas": VILLASSimulationHandler(),
     "myframework": MyFrameworkSimulationHandler(),
 }
 ```

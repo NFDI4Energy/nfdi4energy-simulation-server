@@ -1,0 +1,6 @@
+{
+"http": { 
+    "enabled": true,
+    "port": 8080
+        }
+}

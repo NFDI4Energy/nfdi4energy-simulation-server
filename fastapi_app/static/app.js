@@ -8,8 +8,14 @@ const mosaikFileInput = document.getElementById('mosaik-file-input');
 const mosaikFileListEl = document.getElementById('mosaik-file-list');
 const submitMosaikBtn = document.getElementById('submit-mosaik-btn');
 
+const villasDropZone = document.getElementById('villas-drop-zone');
+const villasFileInput = document.getElementById('villas-file-input');
+const villasFileListEl = document.getElementById('villas-file-list');
+const submitVillasBtn = document.getElementById('submit-villas-btn');
+
 let selectedFiles = [];
 let selectedMosaikFile = null;
+let selectedVillasFile = null;
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
@@ -21,6 +27,7 @@ function switchTab(tab) {
     });
     document.getElementById('daceds-card').classList.toggle('hidden', tab !== 'daceds');
     document.getElementById('mosaik-card').classList.toggle('hidden', tab !== 'mosaik');
+    document.getElementById('villas-card').classList.toggle('hidden', tab !== 'villas');
 }
 
 // --- DaceDS Drag & Drop ---
@@ -123,15 +130,78 @@ function renderMosaikFileList() {
     }
 }
 
+
+// --- VILLAS Drag & Drop ---
+villasDropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    villasDropZone.classList.add('dragover');
+});
+
+villasDropZone.addEventListener('dragleave', () => {
+    villasDropZone.classList.remove('dragover');
+});
+
+villasDropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    villasDropZone.classList.remove('dragover');
+    handleVillasFiles(e.dataTransfer.files);
+});
+
+villasFileInput.addEventListener('change', () => {
+    handleVillasFiles(villasFileInput.files);
+    villasFileInput.value = '';
+});
+
+function handleVillasFiles(fileListObj) {
+    if (fileListObj.length > 0) {
+        selectedVillasFile = fileListObj[0];
+        renderVillasFileList();
+    }
+}
+
+function removeVillasFile() {
+    selectedVillasFile = null;
+    renderVillasFileList();
+}
+
+function renderVillasFileList() {
+    if (selectedVillasFile) {
+        villasFileListEl.innerHTML =
+            `<li>
+                <span class="name">${selectedVillasFile.name}</span>
+                <span class="size">${formatSize(selectedVillasFile.size)}</span>
+                <button class="remove" onclick="removeVillasFile()">✕</button>
+            </li>`;
+        submitVillasBtn.disabled = false;
+    } else {
+        villasFileListEl.innerHTML = '';
+        submitVillasBtn.disabled = true;
+    }
+}
+
+
 // --- Submit ---
-const FRAMEWORKS = { daceds: 'dacedsx', mosaik: 'mosaik' };
+const FRAMEWORKS = { daceds: 'dacedsx', mosaik: 'mosaik', villas: 'villas' };
 
 async function submitSimulation(framework) {
     const frameworkName = FRAMEWORKS[framework];
     const endpoint = '/submit/' + frameworkName;
-    const files = framework === 'daceds' ? selectedFiles : [selectedMosaikFile];
+    let files;
+    let submitBtn;
 
-    const submitBtn = framework === 'daceds' ? submitBtn : submitMosaikBtn;
+    switch (framework) {
+      case 'mosaik':
+        files = [selectedMosaikFile];
+        submitBtn = submitMosaikBtn;
+      case 'villas':
+        files = [selectedVillasFile];
+        submitBtn = submitVillasBtn;
+      default:
+        files = selectedFiles;
+        submitBtn = submitBtn;
+    };
+      
+
     submitBtn.disabled = true;
     submitBtn.textContent = 'Uploading...';
 
@@ -188,7 +258,14 @@ async function submitSimulation(framework) {
 
 function resetBtn(btn, framework) {
     btn.disabled = false;
-    btn.textContent = framework === 'daceds' ? 'Submit Simulation' : 'Submit Mosaik Simulation';
+    switch (framework) {
+      case 'mosaik':
+        btn.textContent = 'Submit Mosaik Simulation';
+      case 'villas':
+        btn.textContent = 'Submit VILLASnode Configuration'
+      default:
+        btn.textContent = 'Submit Simulation';
+    };
 }
 
 function setStatus(type, message, framework) {

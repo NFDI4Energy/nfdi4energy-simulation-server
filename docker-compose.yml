@@ -87,5 +87,32 @@ services:
     networks:
       - sim_network
 
+  villas-node:
+    image: ghcr.io/villasframework/node:1062-merge
+    command: ["node", "/config.json"]
+    volumes:
+      - ./villas/default.json:/config.json
+    networks:
+      - sim_network
+
+  villas-worker:
+    build:
+      context: .
+      dockerfile: villas/villas-worker/Dockerfile
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - REDIS_HOST=redis
+      - RESULTS_DIR=/data/results
+      - RESOURCES_DIR=/data/resources
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - redis
+      - rabbitmq
+      - villas-node
+    volumes:
+      - ./data:/data
+    networks:
+      - sim_network
+
 networks:
   sim_network:

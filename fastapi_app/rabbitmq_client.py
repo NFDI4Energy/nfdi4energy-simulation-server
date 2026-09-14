@@ -32,6 +32,7 @@ class SimulationQueue:
         self.channel = self.connection.channel()
         self.channel.queue_declare(queue="dacedsx_requests", durable=True)
         self.channel.queue_declare(queue="mosaik_requests", durable=True)
+        self.channel.queue_declare(queue="villas_requests", durable=True)
 
     def close(self):
         self.connection.close()
@@ -76,10 +77,16 @@ class MosaikSimulationHandler(SimulationHandler):
     def framework_name(self) -> str:
         return "mosaik"
 
+class VILLASSimulationHandler(SimulationHandler):
+    @property
+    def framework_name(self) -> str:
+        return "villas"
+
 
 HANDLERS = {
     "dacedsx": DaceDSXSimulationHandler(),
     "mosaik": MosaikSimulationHandler(),
+    "villas": VILLASSimulationHandler(),
 }
 
 

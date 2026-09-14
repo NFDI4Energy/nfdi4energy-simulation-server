@@ -16,6 +16,8 @@ RESOURCES_DIR = os.environ.get("RESOURCES_DIR", "/data/resources")
 RESULTS_DIR = os.environ.get("RESULTS_DIR", "/data/results")
 VILLAS_QUEUE = os.environ.get("VILLAS_QUEUE", "villas_requests")
 
+DEFAULT_CONFIG = json.loads('{"config": {"http": { "enabled": true, "port": 8080}}}')
+
 
 def connect_rabbitmq():
     print("connect_rabbitmq called ...")
@@ -43,11 +45,12 @@ async def run_villas_node(config: dict, task_id: str) -> dict:
 
     try:
         response = requests.post("http://villas-node:8080/api/v2/restart", json=payload)
-        print({response})
  #       status_code = msg["status_code"]
  #       print(f"[{task_id}] Status: {status}")
  #       if status_code != 200:
  #           raise Exception("Something went wrong")
+        time.sleep(5)
+        response = requests.post("http://villas-node:8080/api/v2/restart", json=DEFAULT_CONFIG)
 
     except Exception as e:
         result["status"] = "error"

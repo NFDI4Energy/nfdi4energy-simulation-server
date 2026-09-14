@@ -37,13 +37,13 @@ async def run_villas_node(config: dict, task_id: str) -> dict:
     result = {"status": "success", "task_id": task_id}
     logs = []
     sim_progress = 0.0 # This will be a timer to simulate a simulator
+    payload = json.loads('{"config":' + str(json.dumps(config) +'}'))
+    print("the payload:")
+    print(payload)
 
     try:
-        response = requests.get("http://villas-node:8080/api/v2/status")
+        response = requests.post("http://villas-node:8080/api/v2/restart", json=payload)
         print({response})
-        print("here ist the config")
-        print(config)
- #       msg = json.loads(response)
  #       status_code = msg["status_code"]
  #       print(f"[{task_id}] Status: {status}")
  #       if status_code != 200:

@@ -92,6 +92,7 @@ services:
     command: ["node", "/config.json"]
     volumes:
       - ./villas/default.json:/config.json
+      - ./villas/results:/results
     networks:
       - sim_network
 
@@ -103,6 +104,7 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - REDIS_HOST=redis
       - RESULTS_DIR=/data/results
+      - VILLAS_RESULTS_DIR=/villas/results
       - RESOURCES_DIR=/data/resources
       - PYTHONUNBUFFERED=1
     depends_on:
@@ -111,6 +113,7 @@ services:
       - villas-node
     volumes:
       - ./data:/data
+      - ./villas/results:/villas/results
     networks:
       - sim_network
 

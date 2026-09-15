@@ -14,19 +14,18 @@ RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
 REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
 RESOURCES_DIR = os.environ.get("RESOURCES_DIR", "/data/resources")
 RESULTS_DIR = os.environ.get("RESULTS_DIR", "/data/results")
+VILLAS_RESULTS_DIR = os.environ.get("VILLAS_RESULTS_DIR", "/villas/results")
 VILLAS_QUEUE = os.environ.get("VILLAS_QUEUE", "villas_requests")
 
 DEFAULT_CONFIG = json.loads('{"config": {"http": { "enabled": true, "port": 8080}}}')
 
 
 def connect_rabbitmq():
-    print("connect_rabbitmq called ...")
     while True:
         try:
             rmq = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST))
             return rmq
         except pika.exceptions.AMQPConnectionError:
-            print("Waiting for RabbitMQ...")
             time.sleep(3)
 
 
@@ -35,13 +34,9 @@ def connect_redis():
 
 # To test that requests work: get status!
 async def run_villas_node(config: dict, task_id: str) -> dict:
-    print("run_villas_node called called...")
-    result = {"status": "success", "task_id": task_id}
     logs = []
     sim_progress = 0.0 # This will be a timer to simulate a simulator
     payload = json.loads('{"config":' + str(json.dumps(config) +'}'))
-    print("the payload:")
-    print(payload)
 
     try:
         response = requests.post("http://villas-node:8080/api/v2/restart", json=payload)
@@ -52,6 +47,13 @@ async def run_villas_node(config: dict, task_id: str) -> dict:
         time.sleep(5)
         response = requests.post("http://villas-node:8080/api/v2/restart", json=DEFAULT_CONFIG)
 
+        with open(os.path.join(VILLAS_RESULTS_DIR, "results.txt")) as f:
+            villas_results = [json.loads(line) for line in f]
+
+        result = {"status": "success", "task_id": task_id, "output": villas_results}
+
+        os.remove(os.path.join(VILLAS_RESULTS_DIR, "results.txt"))
+
     except Exception as e:
         result["status"] = "error"
         result["error"] = traceback.format_exc()
@@ -61,7 +63,6 @@ async def run_villas_node(config: dict, task_id: str) -> dict:
 
 # TODO: Change scenario description to config
 def on_request(ch, method, props, body):
-    print("on_request called...")
     task_id = None
     try:
         msg = json.loads(body)
@@ -81,7 +82,6 @@ def on_request(ch, method, props, body):
         # Run VILLASnode
         result = asyncio.run(run_villas_node(scenario, task_id))
 
-        # Write "result" into result file
         result_dir = os.path.join(RESULTS_DIR, task_id)
         os.makedirs(result_dir, exist_ok=True)
         output_file = "result.json"
@@ -106,7 +106,6 @@ def on_request(ch, method, props, body):
 
 
 def main():
-    print("Starting villas worker...")
 
     rmq = connect_rabbitmq()
     channel = rmq.channel()

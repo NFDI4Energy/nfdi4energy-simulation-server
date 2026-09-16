@@ -293,17 +293,23 @@ function showResults(taskId, downloads, framework) {
 }
 
 function resetForm(framework) {
-    if (framework === 'daceds') {
-        selectedFiles = [];
-        renderFileList();
-        submitBtn.disabled = selectedFiles.length === 0;
-        submitBtn.textContent = 'Submit Simulation';
-    } else {
+    switch (framework) {
+      case 'mosaik':
         selectedMosaikFile = null;
         renderMosaikFileList();
         submitMosaikBtn.disabled = true;
         submitMosaikBtn.textContent = 'Submit Mosaik Simulation';
-    }
+      case 'villas':
+        selectedVillasFile = null;
+        renderVillasFileList();
+        submitVillasBtn.disabled = true;
+        submitVillasBtn.textContent = 'Submit VILLAS Configuration';
+      default:
+        selectedFiles = [];
+        renderFileList();
+        submitBtn.disabled = selectedFiles.length === 0;
+        submitBtn.textContent = 'Submit Simulation';
+    };
     document.getElementById(framework + '-status-card').classList.add('hidden');
     document.getElementById(framework + '-results-card').classList.add('hidden');
     document.getElementById(framework + '-status-text').textContent = '';

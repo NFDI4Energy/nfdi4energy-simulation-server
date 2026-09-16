@@ -24,6 +24,7 @@ from fastapi_app.frameworks.dacedsx.routes import router as dacedsx_router
 from fastapi_app.frameworks.dacedsx.submission import validate_scenario, LifecycleEvents
 from fastapi_app.frameworks.dacedsx.status import EventEvidence
 from fastapi_app.infrastructure.rabbitmq_client import SimulationQueue
+from fastapi_app.frameworks.mosaik.routes import router as mosaik_router
 
 logger = logging.getLogger(__name__)
 SERVER_ROOT = Path(__file__).resolve().parent
@@ -35,6 +36,7 @@ def create_app(settings=None):
     app.add_middleware(SessionMiddleware, secret_key=settings.session_secret)
     app.include_router(auth_router)
     app.include_router(dacedsx_router)
+    app.include_router(mosaik_router)
     app.include_router(task_router)
     app.include_router(monitor_router)
     app.mount("/static", StaticFiles(directory=str(SERVER_ROOT / "static")), name="static")
@@ -56,11 +58,16 @@ def create_app(settings=None):
             app.state.storage = TaskStorage(settings.resources_dir, settings.results_dir)
             app.state.events = EventStore()
             app.state.status = StatusService(client, EventEvidence(app.state.storage, app.state.events))
+            app.state.status_services = {"dacedsx": app.state.status, "mosaik": StatusService(client)}
             app.state.monitor = MonitorService(app.state.storage, app.state.events, app.state.status)
             app.state.submission = SubmissionService(
                 settings, app.state.storage, client,
                 lambda: SimulationQueue(host=settings.rabbitmq_host, queue_name="simulation_requests"),
                 validate_scenario, LifecycleEvents(app.state.storage))
+            app.state.mosaik_submission = SubmissionService(
+                settings, app.state.storage, client,
+                lambda: SimulationQueue(host=settings.rabbitmq_host, queue_name="mosaik_requests"),
+                framework="mosaik")
         except Exception:
             shutdown()
             raise

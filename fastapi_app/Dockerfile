@@ -17,6 +17,9 @@ COPY . /fastapi_app
 
 WORKDIR /fastapi_app
 
+# Verify ORM imports and migration against the actual image dependencies, without services or credentials.
+RUN python -c "from fastapi_app.persistence.database import create_database, init_db; from fastapi_app.persistence.migrate_framework import migrate; engine, _ = create_database('sqlite:///:memory:'); init_db(engine); migrate(engine); engine.dispose()"
+
 # expose the app port
 EXPOSE 5001
 

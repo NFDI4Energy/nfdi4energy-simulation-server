@@ -11,6 +11,7 @@ class Settings:
     database_url: str = "sqlite:///./simserver_dev.db"
     session_secret: str = field(default="", repr=False)
     auth_disabled: bool = False
+    mosaik_enabled: bool = True
     rabbitmq_host: str = "rabbitmq"
     oidc_client_id: str = ""
     oidc_client_secret: str = field(default="", repr=False)
@@ -30,6 +31,7 @@ class Settings:
             database_url=os.getenv("DATABASE_URL", cls.database_url),
             session_secret=os.getenv("SESSION_SECRET", ""),
             auth_disabled=os.getenv("AUTH_DISABLED", "false").strip().lower() == "true",
+            mosaik_enabled=os.getenv("MOSAIK_ENABLED", "true").strip().lower() == "true",
             rabbitmq_host=os.getenv("RABBITMQ_HOST", cls.rabbitmq_host),
             oidc_client_id=os.getenv("OIDC_CLIENT_ID", ""),
             oidc_client_secret=os.getenv("OIDC_CLIENT_SECRET", ""),

@@ -13,3 +13,6 @@ def create_database(url):
 def init_db(engine):
     from fastapi_app.persistence import models_db
     models_db.Base.metadata.create_all(bind=engine)
+    from fastapi_app.persistence.migrate_framework import verify_framework
+    with engine.connect() as connection:
+        verify_framework(connection)

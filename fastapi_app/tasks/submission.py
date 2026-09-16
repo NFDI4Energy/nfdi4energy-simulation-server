@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi_app.persistence.models_db import Task
 from fastapi_app.tasks.storage import StorageError, flat_filename
 from fastapi_app.infrastructure.rabbitmq_client import PublishUnknown
-from fastapi_app.tasks.contracts import ScenarioValidator, LifecycleNotifier
+from fastapi_app.tasks.contracts import ScenarioRequirements, ScenarioValidator, LifecycleNotifier
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,11 @@ class SubmissionError(Exception):
 
 class SubmissionService:
     def __init__(self, settings, storage, redis_client, queue_factory,
-                 validator: ScenarioValidator, notifier: Optional[LifecycleNotifier] = None):
+                 validator: Optional[ScenarioValidator] = None, notifier: Optional[LifecycleNotifier] = None,
+                 framework="dacedsx"):
+        if framework not in {"dacedsx", "mosaik"}:
+            raise ValueError("Unsupported task framework")
+        self.framework = framework
         self.settings, self.storage, self.redis = settings, storage, redis_client
         self.queue_factory = queue_factory
         self.validator, self.notifier = validator, notifier
@@ -81,8 +85,10 @@ class SubmissionService:
                     scenario_dict = json.load(source)
                 if not isinstance(scenario_dict, dict):
                     raise ValueError("Scenario must be a JSON object")
+                if not scenario_dict:
+                    raise ValueError("Scenario must be a nonempty JSON object")
                 json.dumps(scenario_dict, allow_nan=False)
-                requirements = self.validator(scenario_dict)
+                requirements = self.validator(scenario_dict) if self.validator is not None else ScenarioRequirements()
             except (ValueError, UnicodeDecodeError) as exc:
                 raise SubmissionError("Invalid scenario: " + str(exc), "invalid_scenario") from exc
             required = {flat_filename(name) for name in requirements.required_resources}
@@ -95,7 +101,7 @@ class SubmissionService:
             stage = None
             phase = "metadata"
             task = Task(id=task_id, user_id=owner_id, scenario_id=requirements.scenario_id,
-                        resource_files=filenames, status="PENDING")
+                        resource_files=filenames, status="PENDING", framework=self.framework)
             db.add(task)
             db.commit()
             persisted = True

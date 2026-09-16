@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, JSON, CheckConstraint
 from sqlalchemy.orm import relationship
 
 from fastapi_app.persistence.database import Base
@@ -35,9 +35,11 @@ class User(Base):
 
 class Task(Base):
     __tablename__ = "tasks"
+    __table_args__ = (CheckConstraint("framework IN ('dacedsx', 'mosaik')", name="task_framework_valid"),)
 
     id = Column(String(36), primary_key=True, default=_uuid)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    framework = Column(String(16), nullable=False, default="dacedsx", server_default="dacedsx")
     scenario_id = Column(Text, nullable=True)
     status = Column(String(20), default="PENDING")
     resource_files = Column(JSON, nullable=True)  # e.g. ["scenario.json", "grid.csv"]

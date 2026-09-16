@@ -144,6 +144,7 @@ def me(request: Request, db: Session = Depends(get_db)):
         "email": user.email,
         "display_name": user.display_name,
         "sub": user.sub,
+        "capabilities": {"mosaikSubmissionEnabled": request.app.state.settings.mosaik_enabled},
     }
 
 

@@ -127,6 +127,29 @@ class pandapowerAPI:
         self.line_p = pd.DataFrame(index=range(self.n_steps), columns=line_names, dtype=float)
         self.trafo_p = pd.DataFrame(index=range(self.n_steps), columns=trafo_names, dtype=float)
 
+    def apply_external_setpoints(self, setpoints_by_load_name):
+        """Wendet vom Controller-BB erhaltene Ladeleistungs-Sollwerte an.
+
+        setpoints_by_load_name: dict {loadID (pandapower load name): allowedPower_kW}
+        Im Unterschied zu prepareStep()/load_profile arbeitet dies ueber den
+        pandapower-Lastnamen statt ueber den numerischen Index, weil die
+        Workshop-Ladestationen als benannte Lasten (EV_Charging_Station_A..E)
+        angelegt sind. Wird VOR step() aufgerufen, nachdem die neuesten
+        ChargingSetpoint-Kafka-Nachrichten fuer diesen Zeitschritt gesammelt
+        wurden.
+        """
+        if not setpoints_by_load_name:
+            return
+        name_to_idx = {
+            name: idx for idx, name in zip(self.network.load.index, self.network.load['name'])
+        }
+        for load_name, power_kW in setpoints_by_load_name.items():
+            idx = name_to_idx.get(load_name)
+            if idx is None:
+                print(f"WARNING: unknown load name '{load_name}' in charging setpoint, ignoring")
+                continue
+            self.network.load.at[idx, 'p_mw'] = power_kW / 1000.0
+
     def prepareStep(self, step):
         if self.load_profile is not None and step in self.load_profile.index:
             for col, val in self.load_profile.loc[step].items():

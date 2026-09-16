@@ -29,6 +29,27 @@
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+
+  // Observer edges: comma-separated edge IDs -> full "edge.vehicles"
+  // observer objects. Element/type/trigger are fixed for this use case;
+  // only the observed edge (and derived task name) vary per entry.
+  let obsEdgesInput = (bb.observers || [])
+    .filter((o) => o.element === "edge.vehicles")
+    .map((o) => o.filter)
+    .join(", ");
+  let obsPeriod = (bb.observers && bb.observers[0]?.period) || 60;
+  $: bb.observers = obsEdgesInput
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((edge) => ({
+      task: `vehicles_${edge}`,
+      element: "edge.vehicles",
+      filter: edge,
+      period: obsPeriod,
+      trigger: "not_empty",
+      type: "avro",
+    }));
 </script>
 
 <div class="bb-card" class:collapsed>
@@ -119,6 +140,24 @@
           placeholder="1316826203, 1154372516"
         />
       </label>
+
+      <!-- Row 3b: Observer edges (edge.vehicles observers) -->
+      <div class="field-grid cols-3">
+        <label class="field" style="grid-column: span 2;">
+          <span class="field-label"
+            >Observe vehicles on edges (comma-separated)</span
+          >
+          <input
+            type="text"
+            bind:value={obsEdgesInput}
+            placeholder="A1B1, A1B2, A1B3"
+          />
+        </label>
+        <label class="field">
+          <span class="field-label">Period (s)</span>
+          <input type="number" bind:value={obsPeriod} min="1" />
+        </label>
+      </div>
 
       <!-- Key-Value sections -->
       <div class="kv-section">

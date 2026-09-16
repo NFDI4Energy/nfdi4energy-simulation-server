@@ -1,0 +1,31 @@
+{
+   "namespace": "eu.fau.cs7.daceDS.datamodel",
+   "type": "record",
+   "name": "ChargingSetpoint",
+   "doc": "Kommando-Nachricht vom Controller-BB an PandaPowerWrapper: setze die Ladeleistung fuer eine bestimmte Station/Last auf einen konkreten Wert. Im Unterschied zu Micro/MicroEdge/bus.avsc ist dies kein gemeldeter Zustand, sondern ein Steuerbefehl.",
+   "fields": [
+      {"name": "stationID", "type": "string",
+       "doc": "Stations-Label, z.B. 'A'..'E' - siehe station_mapping.json"},
+
+      {"name": "busID", "type": "string",
+       "doc": "Name des PandaPower-Busses, an dem die Last haengt, z.B. 'LV_Station_A'"},
+
+      {"name": "loadID", "type": "string",
+       "doc": "Name der PandaPower-Last, z.B. 'EV_Charging_Station_A'"},
+
+      {"name": "vehicleID", "type": ["null", "string"], "default": null,
+       "doc": "SUMO-Fahrzeug-ID, sofern gerade ein Fahrzeug an der Station steht, sonst null"},
+
+      {"name": "requestedPower_kW", "type": "double",
+       "doc": "Physikalisch maximal moegliche/gewuenschte Ladeleistung (z.B. 44.0 kW), unabhaengig von der Controller-Entscheidung"},
+
+      {"name": "allowedPower_kW", "type": "double",
+       "doc": "Tatsaechlich vom Controller zugeteilte Leistung in kW. Das ist der Wert, den PandaPowerWrapper als p_mw (nach Umrechnung) auf die Last anwenden soll."},
+
+      {"name": "controllerMode", "type": "string",
+       "doc": "'uncontrolled', 'safe_mode' oder 'heuristic' - fuer Logging/Nachvollziehbarkeit, welcher Controller diesen Sollwert erzeugt hat"},
+
+      {"name": "simTime", "type": "long", "default": 0,
+       "doc": "Simulationszeit in Sekunden zum Zeitpunkt der Entscheidung, zusaetzlich zum NDM-Zeitstempel des Kafka-Envelopes - erleichtert das Debuggen direkt aus dem Payload heraus"}
+   ]
+}

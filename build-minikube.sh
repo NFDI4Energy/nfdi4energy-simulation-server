@@ -144,6 +144,7 @@ build_image "simaas-web:latest" "${ROOT_DIR}/fastapi_app"
 build_image "simservice/simservice:latest" "${ROOT_DIR}/simservice"
 build_image "simservice/pandapowerwrapper-wrapper:latest" "${ROOT_DIR}/simservice/PandaPowerWrapper"
 build_image "simservice/sumowrapper-wrapper:latest" "${ROOT_DIR}/simservice/cppbase+sumowrapper"
+build_image "simservice/controllerwrapper-wrapper:latest" "${ROOT_DIR}/simservice/ControllerWrapper"
 
 log "Preparing Kubernetes credentials"
 kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -

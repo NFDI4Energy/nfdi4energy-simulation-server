@@ -14,6 +14,7 @@ services:
       - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:?set OIDC_CLIENT_SECRET in .env}
       - OIDC_DISCOVERY_URL=https://regapp.nfdi-aai.de/oidc/realms/nfdi/.well-known/openid-configuration
       - SESSION_SECRET=${SESSION_SECRET:?set SESSION_SECRET in .env}
+      - MOSAIK_ENABLED=${MOSAIK_ENABLED:-true}
     depends_on:
       - redis
       - rabbitmq
@@ -51,6 +52,7 @@ services:
       - sim_network
 
   example_worker:
+    profiles: ["example"]
     build:
       context: ./task_queue
     environment:
@@ -65,6 +67,38 @@ services:
       - ./data:/data
     networks:
       - sim_network
+
+  mosaik-orbit:
+    image: ${MOSAIK_ORBIT_IMAGE:-registry.gitlab.com/mosaik/mosaik-gui/mosaik-orbit:nfdi4energy-simaas}
+    environment:
+      MOSAIK_ORBIT_HOST: "0.0.0.0"
+      MOSAIK_ORBIT_PORT: "8442"
+    expose: ["8442"]
+    networks: [sim_network]
+
+  mosaik-gui:
+    image: registry.gitlab.com/mosaik/mosaik-gui/frontend:nfdi4energy-simaas
+    ports: ["127.0.0.1:8002:80"]
+    environment:
+      MOSAIK_ORBIT_PROXY_HOST: mosaik-orbit
+      MOSAIK_ORBIT_PORT: "8442"
+    depends_on: [mosaik-orbit]
+    networks: [sim_network]
+
+  mosaik-worker:
+    build:
+      context: ./mosaik/mosaik-worker
+    image: simaas-mosaik-worker:latest
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      REDIS_HOST: redis
+      MOSAIK_QUEUE: mosaik_requests
+      MOSAIK_WS_URL: ws://mosaik-orbit:8442
+      RESULTS_DIR: /data/results
+      RESOURCES_DIR: /data/resources
+    volumes: ["./data:/data"]
+    depends_on: [rabbitmq, redis, mosaik-orbit]
+    networks: [sim_network]
 
 networks:
   sim_network:

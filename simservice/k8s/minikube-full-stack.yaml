@@ -627,6 +627,8 @@ spec:
                 name: web-config
             - secretRef:
                 name: web-secret
+            - configMapRef:
+                name: mosaik-config
           volumeMounts:
             - name: simservice-data
               mountPath: /data
@@ -840,3 +842,178 @@ spec:
       port: 8080
       targetPort: 8080
       nodePort: 30080
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mosaik-config
+  namespace: simservice
+data:
+  MOSAIK_ENABLED: "true"
+  MOSAIK_BAKE_TIMEOUT: "120"
+  MOSAIK_RUN_TIMEOUT: "3600"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mosaik-orbit
+  namespace: simservice
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mosaik-orbit
+  template:
+    metadata:
+      labels:
+        app: mosaik-orbit
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: mosaik-orbit
+          image: registry.gitlab.com/mosaik/mosaik-gui/mosaik-orbit:nfdi4energy-simaas
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MOSAIK_ORBIT_HOST
+              value: "0.0.0.0"
+            - name: MOSAIK_ORBIT_PORT
+              value: "8442"
+          ports:
+            - containerPort: 8442
+          readinessProbe:
+            tcpSocket:
+              port: 8442
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mosaik-orbit
+  namespace: simservice
+spec:
+  type: ClusterIP
+  selector:
+    app: mosaik-orbit
+  ports:
+    - name: websocket
+      port: 8442
+      targetPort: 8442
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mosaik-worker
+  namespace: simservice
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mosaik-worker
+  template:
+    metadata:
+      labels:
+        app: mosaik-worker
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: mosaik-worker
+          image: simaas-mosaik-worker:latest
+          imagePullPolicy: Never
+          envFrom:
+            - configMapRef:
+                name: mosaik-config
+          env:
+            - name: RABBITMQ_HOST
+              value: rabbitmq.simservice.svc.cluster.local
+            - name: REDIS_HOST
+              value: redis.simservice.svc.cluster.local
+            - name: MOSAIK_QUEUE
+              value: mosaik_requests
+            - name: MOSAIK_WS_URL
+              value: ws://mosaik-orbit:8442
+            - name: RESULTS_DIR
+              value: /data/results
+            - name: RESOURCES_DIR
+              value: /data/resources
+          volumeMounts:
+            - name: simservice-data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: simservice-data
+          persistentVolumeClaim:
+            claimName: simservice-data-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mosaik-gui
+  namespace: simservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mosaik-gui
+  template:
+    metadata:
+      labels:
+        app: mosaik-gui
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: mosaik-gui
+          image: registry.gitlab.com/mosaik/mosaik-gui/frontend:nfdi4energy-simaas
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MOSAIK_ORBIT_PROXY_HOST
+              value: mosaik-orbit.simservice.svc.cluster.local
+            - name: MOSAIK_ORBIT_PORT
+              value: "8442"
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mosaik-gui
+  namespace: simservice
+spec:
+  type: ClusterIP
+  selector:
+    app: mosaik-gui
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80

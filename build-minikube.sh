@@ -32,9 +32,11 @@
 #
 # Forward the HTTPS web service in another terminal:
 #   kubectl -n simservice port-forward service/web 5001:5001
+#   kubectl -n simservice port-forward service/mosaik-gui 8002:80
 #
 # Open:
 #   https://localhost:5001
+#   http://localhost:8002 (Mosaik scenario editor, sharing Orbit with the worker)
 #
 # Inspect the cluster:
 #   kubectl -n simservice get pods,jobs
@@ -45,6 +47,9 @@
 #   kubectl get events -A --sort-by=.lastTimestamp
 #
 # Set MINIKUBE_PROFILE before running to use a non-default profile.
+# Back up existing PostgreSQL before the additive task-framework migration.
+# Mosaik starts enabled for trusted local use; simulator code is not sandboxed.
+# See docs/deployment-guide.md for setup, verification, and recovery.
 
 set -Eeuo pipefail
 
@@ -144,6 +149,7 @@ build_image "simaas-web:latest" "${ROOT_DIR}/fastapi_app"
 build_image "simservice/simservice:latest" "${ROOT_DIR}/simservice"
 build_image "simservice/pandapowerwrapper-wrapper:latest" "${ROOT_DIR}/simservice/PandaPowerWrapper"
 build_image "simservice/sumowrapper-wrapper:latest" "${ROOT_DIR}/simservice/cppbase+sumowrapper"
+build_image "simaas-mosaik-worker:latest" "${ROOT_DIR}/mosaik/mosaik-worker"
 
 log "Preparing Kubernetes credentials"
 kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
@@ -190,11 +196,20 @@ TEMP_DIR=""
 log "Applying the full Minikube stack"
 kubectl apply -f "${MANIFEST}"
 
+log "Migrating task framework metadata"
+migration_job="$(kubectl create -f "${ROOT_DIR}/simservice/k8s/task-framework-migration.yaml" -o name)"
+if ! kubectl -n "${NAMESPACE}" wait --for=condition=complete "${migration_job}" --timeout=180s; then
+    kubectl -n "${NAMESPACE}" logs "${migration_job}" --all-containers=true || true
+    fail "Metadata migration failed; inspect the migration job before continuing"
+fi
+
 log "Restarting local-image deployments"
 kubectl -n "${NAMESPACE}" rollout restart \
     deployment/web \
     deployment/log-consumer \
-    deployment/simservice
+    deployment/simservice \
+    deployment/mosaik-worker \
+    deployment/mosaik-gui
 
 log "Deployment submitted"
 kubectl -n kafka get pods
@@ -205,6 +220,8 @@ cat <<EOF
 Next terminals:
   minikube -p ${PROFILE} mount "${ROOT_DIR}/data:/data"
   kubectl -n ${NAMESPACE} port-forward service/web 5001:5001
+  kubectl -n ${NAMESPACE} port-forward service/mosaik-gui 8002:80
 
 Then open https://localhost:5001
+The Mosaik Create scenario action opens http://localhost:8002
 EOF

@@ -1,4 +1,7 @@
 .idea
+/.vscode/
+*.swp
+*.swo
 *.pyc
 .env
 __pycache__/

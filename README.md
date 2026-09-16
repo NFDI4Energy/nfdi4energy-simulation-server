@@ -1,5 +1,9 @@
 # Simulation Server (Generic Template)
 
+For the current DaceDSX/Mosaik Minikube stack, follow the
+[deployment guide](docs/deployment-guide.md). The generic
+Compose walkthrough below is not the current full-stack deployment procedure.
+
 A flexible, Docker-based architecture for running asynchronous simulation tasks via a web interface, message broker (RabbitMQ), and state cache (Redis).
 
 This repository provides a generic template to dispatch simulation tasks to a queue of workers.

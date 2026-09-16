@@ -50,14 +50,17 @@ RUN git clone https://github.com/confluentinc/librdkafka.git && \
 # ============================================
 # Stage 2: Build Avro C++ 1.12.0
 # ============================================
+# Minikube may expose many CPUs without enough RAM for that many C++ compilers.
+ARG BUILD_JOBS=2
 RUN wget https://archive.apache.org/dist/avro/avro-1.12.0/cpp/avro-cpp-1.12.0.tar.gz && \
     tar -xzf avro-cpp-1.12.0.tar.gz && \
     cd avro-cpp-1.12.0 && \
     rm -rf build && \
     mkdir -p build && cd build && \
-    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON && \
-    make -j$(nproc) && \
-    make install && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+      -DFMT_TEST=OFF -DFMT_DOC=OFF && \
+    cmake --build . --parallel "${BUILD_JOBS}" --target avrocpp avrocpp_s avrogencpp fmt && \
+    cmake --install . && \
     ldconfig
 
 # ============================================
@@ -68,7 +71,7 @@ RUN wget https://github.com/fmtlib/fmt/archive/refs/tags/10.2.1.tar.gz && \
     cd fmt-10.2.1 && \
     mkdir -p build && cd build && \
     cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DFMT_TEST=OFF && \
-    make -j$(nproc) && \
+    make -j"${BUILD_JOBS}" && \
     make install && \
     ldconfig
 
@@ -87,13 +90,15 @@ RUN wget https://github.com/fmtlib/fmt/archive/refs/tags/10.2.1.tar.gz && \
 # ============================================
 # Stage 4: Install SUMO v1.27.1
 # ============================================
+# The wrapper links libsumocpp/libtracicpp; generated language bindings are unused.
 RUN wget https://github.com/eclipse-sumo/sumo/archive/refs/tags/v1_27_1.tar.gz && \
     tar -xzf v1_27_1.tar.gz && \
     cd sumo-1_27_1 && \
     rm -rf build && \
     mkdir -p build && cd build && \
-    cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sumo -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON && \
-    make -j$(nproc) && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sumo -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+      -DENABLE_PYTHON_BINDINGS=OFF -DENABLE_CS_BINDINGS=OFF -DENABLE_JAVA_BINDINGS=OFF && \
+    make -j"${BUILD_JOBS}" && \
     make install
 
 # Keep local source layers after SUMO so wrapper edits reuse the expensive build.
@@ -109,7 +114,7 @@ RUN cd /build/libserdes && \
     chmod +x configure && \
     ./configure --prefix=/usr/local --CFLAGS="-fPIC" --CXXFLAGS="-fPIC" && \
     sed -i 's/--std=c++11/--std=c++17/g' Makefile.config && \
-    make -j$(nproc) && \
+    make -j"${BUILD_JOBS}" && \
     make install && \
     ldconfig
 
@@ -131,7 +136,7 @@ RUN cd /build/cppkafka && \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
       -DCPPKAFKA_DISABLE_TESTS=ON && \
-    make -j$(nproc) && \
+    make -j"${BUILD_JOBS}" && \
     make install && \
     ldconfig
 
@@ -143,7 +148,7 @@ RUN cd /build/pugixml && \
     rm -rf build && \
     mkdir -p build && cd build && \
     cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON && \
-    make -j$(nproc) && \
+    make -j"${BUILD_JOBS}" && \
     make install && \
     ldconfig
 
@@ -161,7 +166,7 @@ COPY CppBaseWrapper/ .
 RUN cp Makefile.docker Makefile
 
 # Build CppBaseWrapper
-RUN make clean && make -j$(nproc)
+RUN make clean && make -j"${BUILD_JOBS}"
 
 # ============================================
 # Stage 9: Build SumoWrapper
@@ -173,7 +178,7 @@ COPY SumoWrapper/ .
 RUN cp Makefile.docker Makefile
 
 # Build SumoWrapper
-RUN make clean && make -j$(nproc)
+RUN make clean && make -j"${BUILD_JOBS}"
 
 # ============================================
 # Runtime Stage

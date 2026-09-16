@@ -193,12 +193,15 @@ async function submitSimulation(framework) {
       case 'mosaik':
         files = [selectedMosaikFile];
         submitBtn = submitMosaikBtn;
+        break;
       case 'villas':
         files = [selectedVillasFile];
         submitBtn = submitVillasBtn;
+        break;
       default:
         files = selectedFiles;
         submitBtn = submitBtn;
+        break;
     };
       
 
@@ -261,10 +264,13 @@ function resetBtn(btn, framework) {
     switch (framework) {
       case 'mosaik':
         btn.textContent = 'Submit Mosaik Simulation';
+        break;
       case 'villas':
         btn.textContent = 'Submit VILLASnode Configuration'
+        break;
       default:
         btn.textContent = 'Submit Simulation';
+        break;
     };
 }
 

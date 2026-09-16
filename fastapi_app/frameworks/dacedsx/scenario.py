@@ -40,7 +40,7 @@ class Scenario(BaseModel):
         if start is not None and end is not None:
             if end <= start:
                 raise ValueError("simulationEnd must be strictly greater than simulationStart")
-            
+
             if blocks:
                 duration = end - start
                 for bb in blocks:

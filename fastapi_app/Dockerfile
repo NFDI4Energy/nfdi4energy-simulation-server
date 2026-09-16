@@ -4,6 +4,8 @@ ENV RABBITMQ_HOST rabbitmq
 ENV REDIS_HOST redis
 ENV RESULTS_DIR /data/results
 ENV RESOURCES_DIR /data/resources
+# Import the canonical fastapi_app package while retaining webapp:app from WORKDIR.
+ENV PYTHONPATH=/
 
 COPY requirements.txt /tmp/
 

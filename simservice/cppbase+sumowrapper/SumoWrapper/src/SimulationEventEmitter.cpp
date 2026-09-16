@@ -1,4 +1,5 @@
 #include "SimulationEventEmitter.h"
+#include "EventFileLock.h"
 
 #include <jansson.h>
 
@@ -7,7 +8,6 @@
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
-#include <fstream>
 #include <iomanip>
 #include <sstream>
 
@@ -64,8 +64,24 @@ json_t* baseEvent(
 
 void appendJsonLine(const std::filesystem::path& path, const std::string& payload) {
     std::filesystem::create_directories(path.parent_path());
-    std::ofstream output(path, std::ios::app);
-    output << payload << '\n';
+    int fd = ::open(path.c_str(), O_CREAT | O_WRONLY | O_APPEND, 0666);
+    if (fd < 0) throw std::system_error(errno, std::generic_category(), "event file open");
+    std::string line = payload + '\n';
+    size_t offset = 0;
+    while (offset < line.size()) {
+        ssize_t written = ::write(fd, line.data() + offset, line.size() - offset);
+        if (written < 0 && errno == EINTR) continue;
+        if (written <= 0) {
+            int error = written < 0 ? errno : EIO;
+            ::close(fd);
+            throw std::system_error(error, std::generic_category(), "event file write");
+        }
+        offset += static_cast<size_t>(written);
+    }
+    int result = ::fsync(fd);
+    int error = errno;
+    ::close(fd);
+    if (result < 0) throw std::system_error(error, std::generic_category(), "event file sync");
 }
 
 }  // namespace
@@ -157,6 +173,8 @@ void SimulationEventEmitter::persistAndPublish(json_t* event, bool metric) {
     if (!resultsDir.empty()) {
         try {
             std::filesystem::path eventsDir = std::filesystem::path(resultsDir) / "events";
+            std::filesystem::create_directories(eventsDir);
+            EventFileLock lock((eventsDir / ".writer.lock").string());
             appendJsonLine(eventsDir / "structured_events.jsonl", payload);
             if (metric) {
                 appendJsonLine(eventsDir / "metrics.jsonl", payload);

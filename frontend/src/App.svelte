@@ -2,15 +2,20 @@
   import { onMount } from 'svelte';
   import Login from './lib/Login.svelte';
   import Dashboard from './lib/Dashboard.svelte';
+  import FrameworkChooser from './lib/FrameworkChooser.svelte';
+  import MosaikWorkspace from './lib/MosaikWorkspace.svelte';
 
   let checkingAuth = true;
   let user = null;
+  let authenticated = false;
+  let framework = null;
 
   async function checkAuth() {
     try {
       const response = await fetch('/auth/me');
       if (response.ok) {
         user = await response.json();
+        authenticated = true;
       } else if (import.meta.env.DEV) {
         user = {
           id: 'dev-user',
@@ -55,8 +60,12 @@
     </div>
   {:else if !user}
     <Login />
+  {:else if framework === 'dacedsx'}
+    <Dashboard {user} onLogout={handleLogout} onSwitchFramework={() => framework = null} />
+  {:else if framework === 'mosaik' && authenticated}
+    <MosaikWorkspace {user} onLogout={handleLogout} onSwitchFramework={() => framework = null} />
   {:else}
-    <Dashboard {user} onLogout={handleLogout} />
+    <FrameworkChooser {user} {authenticated} onChoose={value => framework = value} onLogout={handleLogout} />
   {/if}
 </main>
 

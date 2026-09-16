@@ -9,6 +9,7 @@
 
   export let user;
   export let onLogout = () => {};
+  export let onSwitchFramework = () => {};
 
   let sidebarOpen = false; // Starts closed (slid out of view)
   let activeTab = null; // Starts blank (no tab open)
@@ -56,6 +57,7 @@
       </div>
     </div>
     <div class="header-right">
+      <button class="logout-btn" on:click={onSwitchFramework} title="Switch framework" aria-label="Switch framework">&larr;</button>
       <div class="user-chip">
         <span class="user-avatar"
           >{user.display_name ? user.display_name[0].toUpperCase() : "U"}</span

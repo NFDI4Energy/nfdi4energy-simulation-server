@@ -56,6 +56,12 @@ async def run_mosaik_simulation(scenario, task_id):
             if scenario.get("version") != "1.0" or not isinstance(scenario.get("declaration"), dict):
                 raise ValueError("Expected an Orbit Scenario or GUI export version 1.0")
             scenario = scenario["declaration"]
+        # Change the output_file param for mosaik-csv writer to make result available in UI
+        for sim in (scenario.get("simulators") or {}).values():
+            init = sim.get("init_params") or {}
+            if "output_file" in init:
+                init["output_file"] = os.path.join(
+                    RESULTS_DIR, task_id, os.path.basename(str(init["output_file"])))
         async with connect(MOSAIK_WS_URL, open_timeout=15, close_timeout=5,
                            max_size=10 * 1024 * 1024) as ws:
             async with asyncio.timeout(15):

@@ -117,5 +117,13 @@ services:
     networks:
       - sim_network
 
+  villas-conf:
+    image: registry.git.nrw/rwth-acs/public/villas/conf
+    ports:
+      - "1880:1880"
+    volumes:
+      - ./data:/data
+
+
 networks:
   sim_network:

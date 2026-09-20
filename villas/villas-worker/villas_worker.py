@@ -36,7 +36,32 @@ def connect_redis():
 async def run_villas_node(config: dict, task_id: str) -> dict:
     logs = []
     sim_progress = 0.0 # This will be a timer to simulate a simulator
-    payload = json.loads('{"config":' + str(json.dumps(config) +'}'))
+
+    config["http"] = { "enabled": True, "port": 8080 }
+    config["nodes"]["file"]["uri"] = "/results/results.txt"
+    config["nodes"]["file"]["format"] = "json"
+
+    if "name" in config["nodes"]["signal"]:
+        del config["nodes"]["signal"]["name"]
+
+    if "name" in config["nodes"]["file"]:
+        del config["nodes"]["file"]["name"]
+
+
+    if "dataType" in config["nodes"]["signal"]["in"]["signals"][0]:
+        config["nodes"]["signal"]["in"]["signals"][0]["type"] = config["nodes"]["signal"]["in"]["signals"][0]["dataType"]
+        del config["nodes"]["signal"]["in"]["signals"][0]["dataType"]
+
+
+    if len(config["nodes"]["signal"]["in"]["signals"]) == 2:
+        config["nodes"]["signal"]["in"]["signals"][1]["type"] = config["nodes"]["signal"]["in"]["signals"][1]["dataType"]
+        del config["nodes"]["signal"]["in"]["signals"][1]["dataType"]
+
+    if len(config["paths"]) == 0:
+        config["paths"] = [{"in": "signal", "out": "file"}]
+
+    payload = json.loads('{"config":' + str(json.dumps(config)) +'}')
+    print(payload)
 
     try:
         response = requests.post("http://villas-node:8080/api/v2/restart", json=payload)

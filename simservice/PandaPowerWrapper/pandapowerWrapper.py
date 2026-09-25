@@ -74,6 +74,8 @@ class PandapowerWrapper:
         self.topic_scenario = [f"provision.simulation.{scenarioID}.scenario"]
         self.topic_time = f"orchestration.simulation.{scenarioID}.sync"
         self.topic_status = f"orchestration.simulation.{scenarioID}.status"
+        self.topic_charging_setpoints = f"interaction.simulation.{scenarioID}.charging.setpoints"
+        self.charging_setpoints_consumer = None
         
         self.status_producer = KafkaProducer(self.broker, self.registry, self.kid, useAvro=False) if KafkaProducer else None
         self.event_emitter = SimulationEventEmitter(
@@ -128,6 +130,27 @@ class PandapowerWrapper:
             self.event_emitter.emit("ERROR", "NETWORK_RESOURCE_MISSING", "No Network resource found", metadata={"fatal": True})
             sys.exit(1)
 
+    def apply_pending_charging_setpoints(self):
+        """Sammelt alle seit dem letzten Schritt eingetroffenen
+        ChargingSetpoint-Nachrichten (nicht-blockierend) und wendet sie an.
+        Kein Controller im Szenario -> Consumer ist None oder liefert nie
+        Nachrichten -> diese Methode ist dann einfach ein No-Op."""
+        if not self.charging_setpoints_consumer:
+            return
+        setpoints = {}
+        # kurze, begrenzte Anzahl Polls statt Endlosschleife - genug fuer
+        # die 5 Stationen dieses Workshop-Szenarios, ohne bei einer
+        # Nachrichtenflut zu haengen
+        for _ in range(20):
+            msg = self.charging_setpoints_consumer.poll(0.05)
+            if msg is None or msg.error():
+                break
+            setpoint = msg.value()
+            setpoints[setpoint['loadID']] = setpoint['allowedPower_kW']
+        if setpoints:
+            self.log(f"Applying charging setpoints: {setpoints}")
+            self.api.apply_external_setpoints(setpoints)
+
     def run(self):
         failed = False
         self.event_emitter.emit("WRAPPER", "WRAPPER_STARTED", "PandaPower wrapper started", progress=0.20)
@@ -158,7 +181,18 @@ class PandapowerWrapper:
         try:
             self.api.init()
             self.event_emitter.emit("SIMULATION", "NETWORK_LOADED", "PandaPower network loaded")
-            
+
+            # Optional: nur relevant, wenn ein Controller-BB im Szenario ist
+            # und tatsaechlich Nachrichten auf diesem Topic produziert. Ohne
+            # Controller bleiben Polls hier einfach folgenlos leer - die
+            # bestehende load_profile.csv-Logik in prepareStep() greift dann
+            # unveraendert weiter, kein Verhaltensunterschied zu vorher.
+            if KafkaConsumer:
+                self.charging_setpoints_consumer = KafkaConsumer(
+                    self.broker, self.registry, [self.topic_charging_setpoints],
+                    self.kid + ".charging",
+                )
+
             synced = self.scenario_data.get('execution', {}).get('syncedParticipants', 1)
             self.timeSync = TimeSync(self.broker, self.registry, self.topic_time, self.kid + ".ts", synced, logging=False)
             self.timeSync.joinTiming()
@@ -169,6 +203,7 @@ class PandapowerWrapper:
                 self.timeSync.timeAdvance(step_size)
                 self.log(f"Step {step}")
                 self.api.prepareStep(step)
+                self.apply_pending_charging_setpoints()
                 converged = self.api.step(step)
                 simulation_time = step * step_size
                 progress = 0.20 + (0.70 * ((step + 1) / n_steps))

@@ -1,0 +1,112 @@
+{
+  "scenarioID": "scenario_heuristic",
+  "domainReferences": {},
+  "simulationStart": 0,
+  "simulationEnd": 3600,
+  "execution": {
+    "randomSeed": 23,
+    "syncedParticipants": 3,
+    "constraints": "",
+    "priority": 0
+  },
+  "buildingBlocks": [
+    {
+      "instanceID": "Sumo",
+      "type": "SumoWrapper",
+      "layer": "micro",
+      "domain": "traffic",
+      "stepLength": 1000,
+      "parameters": {},
+      "resources": {
+        "background_traffic_30.trips.xml": "Traffic",
+        "workshop_network.net.xml": "RoadMap",
+        "workshop_routes_.rou.xml": "Traffic"
+      },
+      "results": {},
+      "synchronized": true,
+      "isExternal": false,
+      "responsibilities": [
+        "*"
+      ],
+      "observers": [
+        {
+          "task": "vehicles_A1B1",
+          "element": "edge.vehicles",
+          "filter": "A1B1",
+          "period": 1000,
+          "trigger": "not_empty",
+          "type": "avro"
+        },
+        {
+          "task": "vehicles_A1B2",
+          "element": "edge.vehicles",
+          "filter": "A1B2",
+          "period": 1000,
+          "trigger": "not_empty",
+          "type": "avro"
+        },
+        {
+          "task": "vehicles_A1B3",
+          "element": "edge.vehicles",
+          "filter": "A1B3",
+          "period": 1000,
+          "trigger": "not_empty",
+          "type": "avro"
+        },
+        {
+          "task": "vehicles_A1B4",
+          "element": "edge.vehicles",
+          "filter": "A1B4",
+          "period": 1000,
+          "trigger": "not_empty",
+          "type": "avro"
+        },
+        {
+          "task": "vehicles_A1B5",
+          "element": "edge.vehicles",
+          "filter": "A1B5",
+          "period": 1000,
+          "trigger": "not_empty",
+          "type": "avro"
+        }
+      ]
+    },
+    {
+      "instanceID": "PP",
+      "type": "PandaPowerWrapper",
+      "layer": "micro",
+      "domain": "energy",
+      "stepLength": 50000,
+      "parameters": {},
+      "resources": {
+        "workshop_ev_charging_network.json": "Network"
+      },
+      "results": {},
+      "synchronized": true,
+      "isExternal": false,
+      "responsibilities": [],
+      "observers": []
+    },
+    {
+      "instanceID": "Controller",
+      "type": "ControllerWrapper",
+      "layer": "micro",
+      "domain": "energy",
+      "stepLength": 50000,
+      "parameters": {
+        "controllerMode": "heuristic",
+        "transformerCapacity_kW": "160"
+      },
+      "resources": {
+        "station_mapping.json": "Config"
+      },
+      "results": {},
+      "synchronized": true,
+      "isExternal": false,
+      "responsibilities": [],
+      "observers": []
+    }
+  ],
+  "translators": [],
+  "projectors": []
+}

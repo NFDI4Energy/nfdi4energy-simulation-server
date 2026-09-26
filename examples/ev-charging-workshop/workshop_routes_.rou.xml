@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Feste Routen fuer den SimaaS-Workshop: 5 Fahrzeuge, je eines pro
+Ladestation (A1B1..A1B5). Kein randomTrips.py - jedes Fahrzeug faehrt
+deterministisch zu "seiner" Station und bleibt dort geparkt stehen,
+damit der Controller-BB ueber die gesamte Simulationsdauer zuverlaessig
+"Fahrzeug an Station X anwesend" erkennen kann.
+
+Stations-Mapping (siehe Schritt 2):
+  A -> A1B1   B -> A1B2   C -> A1B3   D -> A1B4   E -> A1B5
+-->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+
+    <vType id="ev" accel="1.0" decel="4.5" sigma="0.5"
+           length="4.5" maxSpeed="13.9" color="0,255,0"/>
+
+    <route id="route_A" edges="A1B1"/>
+    <route id="route_B" edges="A1B2"/>
+    <route id="route_C" edges="A1B3"/>
+    <route id="route_D" edges="A1B4"/>
+    <route id="route_E" edges="A1B5"/>
+
+    <!--
+    Gestaffelte Ankunfts- und Standzeiten, damit die Anzahl gleichzeitig
+    ladender Fahrzeuge ueber die Zeit variiert (Rampe 1->5->1), statt
+    dass alle 5 gleichzeitig ab t=0 laden. Sobald die duration eines
+    Stops ablaeuft, hat das Fahrzeug keine weitere Edge auf seiner
+    Route mehr -> SUMO entfernt es automatisch ("verlaesst die
+    Station"), ganz ohne zusaetzliche Rueckfahrt-Edges.
+
+    Gleichzeitigkeits-Zeitplan (Sekunden):
+      0-300:    A            (1 Fahrzeug)
+      300-600:  A,B          (2)
+      600-900:  A,B,C        (3)
+      900-1200: A,B,C,D      (4)
+      1200-1800:A,B,C,D,E    (5 - kurzer Ueberlast-Peak)
+      1800-2100:B,C,D,E      (4)
+      2100-2400:C,D,E        (3)
+      2400-2700:D,E          (2)
+      2700-3000:E            (1)
+      >3000:    -            (0)
+
+    Simulationsdauer sollte daher mind. 3000-3200s betragen, damit
+    Fahrzeug E noch planmaessig abfahren kann.
+    -->
+    <vehicle id="ev_A" type="ev" route="route_A" depart="0" departPos="free">
+        <stop edge="A1B1" duration="1800" parking="true"/>
+    </vehicle>
+
+    <vehicle id="ev_B" type="ev" route="route_B" depart="300" departPos="free">
+        <stop edge="A1B2" duration="1800" parking="true"/>
+    </vehicle>
+
+    <vehicle id="ev_C" type="ev" route="route_C" depart="600" departPos="free">
+        <stop edge="A1B3" duration="1800" parking="true"/>
+    </vehicle>
+
+    <vehicle id="ev_D" type="ev" route="route_D" depart="900" departPos="free">
+        <stop edge="A1B4" duration="1800" parking="true"/>
+    </vehicle>
+
+    <vehicle id="ev_E" type="ev" route="route_E" depart="1200" departPos="free">
+        <stop edge="A1B5" duration="1800" parking="true"/>
+    </vehicle>
+
+</routes>

@@ -1,0 +1,56 @@
+{
+  "_comment": "Verbindet die SUMO-Stationsedges (Schritt 2) mit den PandaPower-Bussen/Lasten (aus build_workshop_network.py). Wird vom Controller-BB genutzt, um Fahrzeugpraesenz auf einer Edge einer Ladeleistungs-Anforderung am richtigen Bus zuzuordnen. Die sumo_x/sumo_y-Felder werden spaeter auch fuer die Frontend-Marker (Schritt 7) wiederverwendet.",
+
+  "stations": [
+    {
+      "label": "A",
+      "sumo_edge": "A1B1",
+      "sumo_junction": "B1",
+      "sumo_x": 361.80,
+      "sumo_y": 190.21,
+      "pandapower_bus": "LV_Station_A",
+      "pandapower_load": "EV_Charging_Station_A",
+      "max_power_kw": 44.0
+    },
+    {
+      "label": "B",
+      "sumo_edge": "A1B2",
+      "sumo_junction": "B2",
+      "sumo_x": 223.61,
+      "sumo_y": 380.42,
+      "pandapower_bus": "LV_Station_B",
+      "pandapower_load": "EV_Charging_Station_B",
+      "max_power_kw": 44.0
+    },
+    {
+      "label": "C",
+      "sumo_edge": "A1B3",
+      "sumo_junction": "B3",
+      "sumo_x": 0.00,
+      "sumo_y": 307.77,
+      "pandapower_bus": "LV_Station_C",
+      "pandapower_load": "EV_Charging_Station_C",
+      "max_power_kw": 44.0
+    },
+    {
+      "label": "D",
+      "sumo_edge": "A1B4",
+      "sumo_junction": "B4",
+      "sumo_x": 0.00,
+      "sumo_y": 72.65,
+      "pandapower_bus": "LV_Station_D",
+      "pandapower_load": "EV_Charging_Station_D",
+      "max_power_kw": 44.0
+    },
+    {
+      "label": "E",
+      "sumo_edge": "A1B5",
+      "sumo_junction": "B5",
+      "sumo_x": 223.61,
+      "sumo_y": 0.00,
+      "pandapower_bus": "LV_Station_E",
+      "pandapower_load": "EV_Charging_Station_E",
+      "max_power_kw": 44.0
+    }
+  ]
+}

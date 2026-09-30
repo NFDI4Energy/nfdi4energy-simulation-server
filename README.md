@@ -1,12 +1,22 @@
-# Simulation Server (Generic Template)
+# NFDI4Energy Simulation Server
 
-A flexible, Docker-based architecture for running asynchronous simulation tasks via a web interface, message broker (RabbitMQ), and state cache (Redis).
+Run simulations across multiple frameworks through a shared web application.
+After signing in, choose a framework to submit scenarios, inspect task status and
+history, and download results.
 
-This repository provides a generic template to dispatch simulation tasks to a queue of workers.
+For local setup, follow the [deployment guide](docs/deployment-guide.md).
+
+## Frameworks
+
+- DaceDSX
+- Mosaik
 
 ## Architecture
 
-The system uses a microservice architecture built for scalability and generic simulation handling.
+Frameworks share the Svelte frontend, FastAPI backend, authentication, PostgreSQL
+task ownership and metadata, Redis runtime status, and shared storage. RabbitMQ
+routes tasks to framework-specific queues and workers. Kafka carries DaceDSX
+simulation events.
 
 ```mermaid
 graph TD
@@ -14,13 +24,17 @@ graph TD
     FastAPI -->|"Publish Task"| RabbitMQ[(RabbitMQ Queue)]
     FastAPI -->|"Set Status 'PENDING'"| Redis[(Redis Cache)]
     
-    RabbitMQ -->|"Consume Task"| Worker1["Worker 1 (Python)"]
-    RabbitMQ -->|"Consume Task"| WorkerN["Worker N"]
+    FastAPI -->|"Ownership / Metadata"| PostgreSQL[(PostgreSQL)]
+    RabbitMQ -->|"Framework A Queue"| Worker1["Framework A Worker / Runtime"]
+    RabbitMQ -->|"Framework B Queue"| WorkerN["Framework B Worker / Runtime"]
     
-    Worker1 -->|"Read Inputs"| InputVolume["Shared Volume: /data/resources"]
+    Worker1 -->|"Read Resources as Needed"| InputVolume["Shared Volume: /data/resources"]
+    WorkerN -->|"Read Resources as Needed"| InputVolume
     Worker1 -->|"Set Status 'RUNNING'"| Redis
     Worker1 -->|"Write Outputs"| OutputVolume["Shared Volume: /data/results"]
     Worker1 -->|"Set Status 'DONE'"| Redis
+    WorkerN -->|"Update Status"| Redis
+    WorkerN -->|"Write Outputs"| OutputVolume
     
     Client -->|"HTTP GET Status"| FastAPI
     FastAPI -->|"Read Status"| Redis
@@ -29,7 +43,7 @@ graph TD
 
 ## Sequence Flow
 
-The following sequence illustrates a typical end-to-end task execution:
+The following sequence illustrates the shared submission flow and a successful run:
 
 ```mermaid
 sequenceDiagram
@@ -39,18 +53,20 @@ sequenceDiagram
     participant RabbitMQ
     participant Worker
     participant Redis
+    participant PostgreSQL
 
-    Client->>FastAPI: POST /submit (Scenario Files)
+    Client->>FastAPI: Submit scenario to selected framework endpoint
     FastAPI->>SharedVolume: Save files to /data/resources/{task_id}/
-    FastAPI->>RabbitMQ: Publish task_id & scenario JSON to 'simulation_requests'
+    FastAPI->>PostgreSQL: Commit task ownership and framework
     FastAPI->>Redis: SET task:{task_id} status:PENDING
+    FastAPI->>RabbitMQ: Publish task_id & scenario JSON to framework queue
     FastAPI-->>Client: Return {task_id}
 
     RabbitMQ->>Worker: Deliver message (task_id, scenario)
     Worker->>Redis: SET task:{task_id} status:RUNNING
-    Worker->>SharedVolume: Read inputs from /data/resources/{task_id}/
+    Note over Worker: Use scenario JSON and uploaded resources as required
     
-    Note over Worker: Execute Custom Simulation Logic
+    Note over Worker: Execute framework simulation
 
     Worker->>SharedVolume: Write outputs to /data/results/{task_id}/
     Worker->>Redis: SET task:{task_id} status:DONE
@@ -59,55 +75,62 @@ sequenceDiagram
     loop Polling Status
         Client->>FastAPI: GET /check/{task_id}
         FastAPI->>Redis: GET task:{task_id}
-        FastAPI->>SharedVolume: Discover files (if status is DONE)
-        FastAPI-->>Client: Return status & download URLs
+        FastAPI->>SharedVolume: List available result files
+        FastAPI-->>Client: Return status & result filenames
     end
 ```
 
 ## Prerequisites
 
-- [Docker](https://docs.docker.com/get-docker/)
-- [Docker Compose](https://docs.docker.com/compose/install/)
+- Docker, Minikube, kubectl, Git, Node.js/npm, Python 3, and OpenSSL.
+- OIDC credentials are optional for local development.
 
 ## Getting Started
 
-1. **Clone the repository**
+For local use without OIDC, create `.env` only if it does not already exist:
+
 ```bash
-git clone https://github.com/NFDI4Energy/nfdi4energy-simulation-server
-cd simulation-server
+test -f .env || cp .env.example .env
+chmod 600 .env
+openssl rand -hex 32
 ```
 
-2. **Start the stack**
-Run the following command to build the images and start the services (FastAPI, RabbitMQ, Redis, and a generic example worker):
+Set `AUTH_DISABLED=true` in `.env`, use the generated value for `SESSION_SECRET`,
+and set `DB_PASSWORD` (keep the existing password if the database already exists).
+`OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET` can be left blank.
+
+Follow the [deployment guide](docs/deployment-guide.md) for TLS certificates,
+Minikube, and the data mount. Then, from the repository root:
+
 ```bash
-docker-compose up -d --build
+bash build-minikube.sh
 ```
 
-3. **Access the Web Interface**
-Open `http://localhost:5001` in your browser. You can upload a scenario file (JSON) to queue a new task.
+Keep the data mount running. After deployment, forward the shared web application:
 
-4. **Monitor the Worker**
-Check the logs of the example worker to see it process the queue:
 ```bash
-docker-compose logs -f example_worker
+kubectl -n simservice port-forward service/web 5001:5001
 ```
 
-5. **Stop the stack**
+Open **https://localhost:5001**, sign in, and choose a framework.
+In local mode, **Sign in** opens a shared development account without an external
+login. Use this mode only on your own trusted machine, not a public deployment.
+To use OIDC instead, set `AUTH_DISABLED=false`, supply the OIDC credentials in
+`.env`, and rerun the build script.
+
+Framework editors may need a separate port-forward. For example, to use Mosaik's
+**Create scenario** action, run this in another terminal:
+
 ```bash
-docker-compose down
+kubectl -n simservice port-forward service/mosaik-gui 8002:80
 ```
 
-## Creating Custom Workers
+The Mosaik editor is available at **http://localhost:8002**. See the deployment
+guide for framework-specific services and configuration.
 
-To use your own simulation logic, modify or replace `task_queue/example_worker.py`. The fundamental requirements for a worker are:
-
-1. **Listen to RabbitMQ**: Subscribe to the `simulation_requests` queue.
-2. **Read Inputs**: Access user-uploaded files from `RESOURCES_DIR/{task_id}/`.
-3. **Execute**: Run your computationally heavy task, model execution, or custom code.
-4. **Write Outputs**: Save the resulting data/reports to `RESULTS_DIR/{task_id}/`.
-5. **Update State**: Update the `Redis` status token (`task:{task_id}`) to `DONE` and acknowledge the RabbitMQ message.
-
-The FastAPI web service will automatically detect any new files saved to `RESULTS_DIR /{task_id}/` and serve them as downloadable links to the client.
+Inputs are stored under `/data/resources/{task_id}/`; results are saved under
+`/data/results/{task_id}/`. Keep credentials out of Git and use the stack on a
+trusted local machine; do not expose the scenario editor publicly.
 
 ## License
 

@@ -6,6 +6,10 @@ RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
 REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
 RESULTS_DIR = os.environ.get("RESULTS_DIR", "/data/results")
 
+
+def task_results_dir(task_id):
+    return os.path.join(RESULTS_DIR, task_id)
+
 def main():
     # 1. Connect to RabbitMQ (with retry)
     while True:
@@ -36,7 +40,7 @@ def main():
         # 5. Simulate Work (Read inputs -> Write outputs)
         # Inputs at: /data/resources/{task_id}/
         # Outputs at: /data/results/{task_id}/
-        result_dir = os.path.join(RESULTS_DIR, task_id)
+        result_dir = task_results_dir(task_id)
         os.makedirs(result_dir, exist_ok=True)
         
         output_file = "result.json"

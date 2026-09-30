@@ -1,128 +1,110 @@
-import os
-import json
-import uuid
-import mimetypes
-from typing import List
-
-import redis
-from fastapi import FastAPI, Request, UploadFile, File
-from fastapi.responses import JSONResponse, FileResponse
+"""FastAPI assembly. Task and monitor behavior lives in services and routers."""
+import logging
+from pathlib import Path
+from fastapi import FastAPI, Request, Depends
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
+import redis
+from fastapi_app.authentication.auth import router as auth_router, get_current_user_or_none, create_oauth
+from fastapi_app.persistence.database import create_database, init_db
+from fastapi_app.persistence.database_dependencies import get_db
+from fastapi_app.core.settings import Settings
+from fastapi_app.frameworks.dacedsx.events.store import EventStore
+from fastapi_app.frameworks.dacedsx.events.persistence import close_persistence
+from fastapi_app.tasks.storage import TaskStorage, StorageError
+from fastapi_app.tasks.status import StatusService
+from fastapi_app.tasks.submission import SubmissionService, SubmissionError
+from fastapi_app.frameworks.dacedsx.monitoring.service import MonitorService
+from fastapi_app.tasks.dependencies import TaskNotFound
+from fastapi_app.tasks.routes import router as task_router
+from fastapi_app.frameworks.dacedsx.monitoring.routes import router as monitor_router
+from fastapi_app.frameworks.dacedsx.routes import router as dacedsx_router
+from fastapi_app.frameworks.dacedsx.submission import validate_scenario, LifecycleEvents
+from fastapi_app.frameworks.dacedsx.status import EventEvidence
+from fastapi_app.infrastructure.rabbitmq_client import SimulationQueue
+from fastapi_app.frameworks.mosaik.routes import router as mosaik_router
 
-from rabbitmq_client import SimulationQueue
-
-
-REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
-RESULTS_DIR = os.environ.get("RESULTS_DIR", "/data/results")
-RESOURCES_DIR = os.environ.get("RESOURCES_DIR", "/data/resources")
-
-redis_client = redis.Redis(host=REDIS_HOST, port=6379, db=0)
-
-app = FastAPI()
-
-SERVER_ROOT = os.path.dirname(__file__)
-
-app.mount(
-    "/static", StaticFiles(directory=os.path.join(SERVER_ROOT, "static")), name="static"
-)
-
-templates = Jinja2Templates(directory=os.path.join(SERVER_ROOT, "templates"))
-
-
-@app.get("/")
-def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
-
-
-@app.post("/submit")
-async def submit_simulation(files: List[UploadFile] = File(...)):
-    """Accept uploaded files, save to /data/resources/{task_id}, queue the task."""
-    task_id = str(uuid.uuid4())
-
-    task_resources_dir = os.path.join(RESOURCES_DIR, task_id)
-    os.makedirs(task_resources_dir, exist_ok=True)
-
-    # First file is always the scenario description
-    scenario_json = None
-
-    for i, f in enumerate(files):
-        content = await f.read()
-        file_path = os.path.join(task_resources_dir, f.filename)
-        with open(file_path, "wb") as out:
-            out.write(content)
-
-        if i == 0:
-            scenario_json = json.loads(content)
-
-    queue = SimulationQueue()
-    queue.publish(task_id, scenario_json)
-    queue.close()
-
-    redis_client.hset(
-        f"task:{task_id}",
-        mapping={"status": "PENDING", "files": "[]", "error": ""},
-    )
-
-    return JSONResponse(content={"task_id": task_id})
+logger = logging.getLogger(__name__)
+SERVER_ROOT = Path(__file__).resolve().parent
 
 
-@app.get("/check/{task_id}")
-async def check_task(task_id: str):
-    data = redis_client.hgetall(f"task:{task_id}")
+def create_app(settings=None):
+    settings = settings or Settings.from_env()
+    app = FastAPI()
+    app.add_middleware(SessionMiddleware, secret_key=settings.session_secret)
+    app.include_router(auth_router)
+    app.include_router(dacedsx_router)
+    app.include_router(mosaik_router)
+    app.include_router(task_router)
+    app.include_router(monitor_router)
+    app.mount("/static", StaticFiles(directory=str(SERVER_ROOT / "static")), name="static")
+    app.mount("/dashboard", StaticFiles(directory=str(SERVER_ROOT / "static/svelte-dist"), html=True), name="dashboard")
+    templates = Jinja2Templates(directory=str(SERVER_ROOT / "templates"))
 
-    if not data:
-        return JSONResponse(content={"status": "NOT_FOUND"}, status_code=404)
+    @app.on_event("startup")
+    def startup():
+        settings.validate()
+        app.state.settings = settings
+        app.state.oauth = create_oauth(settings)
+        engine, factory = create_database(settings.database_url)
+        app.state.engine, app.state.session_factory = engine, factory
+        try:
+            init_db(engine)
+            client = redis.Redis(host=settings.redis_host, port=6379, db=0,
+                                 socket_connect_timeout=2, socket_timeout=2)
+            app.state.redis = client
+            app.state.storage = TaskStorage(settings.resources_dir, settings.results_dir)
+            app.state.events = EventStore()
+            app.state.status = StatusService(client, EventEvidence(app.state.storage, app.state.events))
+            app.state.status_services = {"dacedsx": app.state.status, "mosaik": StatusService(client)}
+            app.state.monitor = MonitorService(app.state.storage, app.state.events, app.state.status)
+            app.state.submission = SubmissionService(
+                settings, app.state.storage, client,
+                lambda: SimulationQueue(host=settings.rabbitmq_host, queue_name="simulation_requests"),
+                validate_scenario, LifecycleEvents(app.state.storage))
+            app.state.mosaik_submission = SubmissionService(
+                settings, app.state.storage, client,
+                lambda: SimulationQueue(host=settings.rabbitmq_host, queue_name="mosaik_requests"),
+                framework="mosaik")
+        except Exception:
+            shutdown()
+            raise
 
-    status = data[b"status"].decode()
-    response = {"task_id": task_id, "status": status}
+    @app.on_event("shutdown")
+    def shutdown():
+        for name, method in (("events", "close"), ("redis", "close"), ("engine", "dispose")):
+            resource = getattr(app.state, name, None)
+            if resource is not None:
+                getattr(resource, method)()
+        close_persistence()
 
-    if status == "DONE":
-        # Scan actual results directory for files
-        task_dir = os.path.join(RESULTS_DIR, task_id)
-        files = []
-        if os.path.isdir(task_dir):
-            for root, _, filenames in os.walk(task_dir):
-                for f in filenames:
-                    rel = os.path.relpath(os.path.join(root, f), task_dir)
-                    files.append(rel)
-        response["files"] = files
-        response["downloads"] = [f"/download/{task_id}/{f}" for f in files]
-    elif status == "ERROR":
-        response["error"] = data.get(b"error", b"").decode()
+    @app.exception_handler(TaskNotFound)
+    async def task_not_found(request, exc):
+        return JSONResponse({"error": "Task not found or access denied"}, status_code=404)
 
-    return JSONResponse(content=response)
+    @app.exception_handler(StorageError)
+    async def invalid_path(request, exc):
+        return JSONResponse({"error": str(exc), "code": "invalid_path"}, status_code=400)
 
+    @app.exception_handler(SubmissionError)
+    async def submission_error(request, exc):
+        body = {"error": str(exc), "code": exc.code}
+        if exc.task_id:
+            body["task_id"] = exc.task_id
+        return JSONResponse(body, status_code=exc.status_code)
 
-@app.get("/list_files/{task_id}")
-async def list_files(task_id: str):
-    task_dir = os.path.join(RESULTS_DIR, task_id)
+    @app.exception_handler(OSError)
+    async def storage_error(request, exc):
+        logger.exception("Storage operation failed", exc_info=exc)
+        return JSONResponse({"error": "Task storage is unavailable", "code": "storage_unavailable"}, status_code=503)
 
-    if not os.path.isdir(task_dir):
-        return JSONResponse(
-            content={"error": "No results directory found"}, status_code=404
-        )
+    @app.get("/")
+    def index(request: Request, db=Depends(get_db)):
+        return templates.TemplateResponse("index.html", {"request": request, "user": get_current_user_or_none(request, db)})
 
-    files = []
-    for root, _, filenames in os.walk(task_dir):
-        for f in filenames:
-            rel = os.path.relpath(os.path.join(root, f), task_dir)
-            files.append(rel)
-
-    return JSONResponse(content={"task_id": task_id, "files": files})
+    return app
 
 
-@app.get("/download/{task_id}/{filename:path}")
-async def download_file(task_id: str, filename: str):
-    file_path = os.path.join(RESULTS_DIR, task_id, filename)
-
-    if not os.path.isfile(file_path):
-        return JSONResponse(content={"error": "File not found"}, status_code=404)
-
-    media_type, _ = mimetypes.guess_type(filename)
-
-    return FileResponse(
-        path=file_path,
-        filename=os.path.basename(filename),
-        media_type=media_type or "application/octet-stream",
-    )
+app = create_app()

@@ -1,0 +1,176 @@
+{
+  "name": "long_profile_lv_feeder",
+  "f_hz": 50.0,
+  "sn_mva": 1,
+  "bus": [
+    {
+      "name": "Grid",
+      "vn_kv": 20.0,
+      "type": "b"
+    },
+    {
+      "name": "LV Main",
+      "vn_kv": 0.4,
+      "type": "b"
+    },
+    {
+      "name": "Residential North",
+      "vn_kv": 0.4,
+      "type": "b"
+    },
+    {
+      "name": "Residential South",
+      "vn_kv": 0.4,
+      "type": "b"
+    },
+    {
+      "name": "Commercial",
+      "vn_kv": 0.4,
+      "type": "b"
+    },
+    {
+      "name": "EV Hub",
+      "vn_kv": 0.4,
+      "type": "b"
+    },
+    {
+      "name": "PV Field",
+      "vn_kv": 0.4,
+      "type": "b"
+    }
+  ],
+  "ext_grid": [
+    {
+      "name": "GridConn",
+      "bus": 0,
+      "vm_pu": 1.02,
+      "va_degree": 0.0
+    }
+  ],
+  "trafo": [
+    {
+      "name": "MainTrafo",
+      "hv_bus": 0,
+      "lv_bus": 1,
+      "sn_mva": 1.0,
+      "vn_hv_kv": 20.0,
+      "vn_lv_kv": 0.4,
+      "vk_percent": 6.0,
+      "vkr_percent": 1.206,
+      "pfe_kw": 1.65,
+      "i0_percent": 0.2619,
+      "shift_degree": 150.0,
+      "vector_group": "Dyn5"
+    }
+  ],
+  "line": [
+    {
+      "name": "Main_to_North",
+      "from_bus": 1,
+      "to_bus": 2,
+      "length_km": 0.18,
+      "r_ohm_per_km": 0.642,
+      "x_ohm_per_km": 0.083,
+      "c_nf_per_km": 210.0,
+      "max_i_ka": 0.22
+    },
+    {
+      "name": "North_to_South",
+      "from_bus": 2,
+      "to_bus": 3,
+      "length_km": 0.16,
+      "r_ohm_per_km": 0.642,
+      "x_ohm_per_km": 0.083,
+      "c_nf_per_km": 210.0,
+      "max_i_ka": 0.20
+    },
+    {
+      "name": "Main_to_Commercial",
+      "from_bus": 1,
+      "to_bus": 4,
+      "length_km": 0.12,
+      "r_ohm_per_km": 0.642,
+      "x_ohm_per_km": 0.083,
+      "c_nf_per_km": 210.0,
+      "max_i_ka": 0.24
+    },
+    {
+      "name": "Commercial_to_EV",
+      "from_bus": 4,
+      "to_bus": 5,
+      "length_km": 0.08,
+      "r_ohm_per_km": 0.642,
+      "x_ohm_per_km": 0.083,
+      "c_nf_per_km": 210.0,
+      "max_i_ka": 0.20
+    },
+    {
+      "name": "Main_to_PV",
+      "from_bus": 1,
+      "to_bus": 6,
+      "length_km": 0.2,
+      "r_ohm_per_km": 0.642,
+      "x_ohm_per_km": 0.083,
+      "c_nf_per_km": 210.0,
+      "max_i_ka": 0.22
+    }
+  ],
+  "load": [
+    {
+      "name": "NorthHouseholds",
+      "bus": 2,
+      "p_mw": 0.055,
+      "q_mvar": 0.018
+    },
+    {
+      "name": "SouthHouseholds",
+      "bus": 3,
+      "p_mw": 0.045,
+      "q_mvar": 0.015
+    },
+    {
+      "name": "SmallShops",
+      "bus": 4,
+      "p_mw": 0.035,
+      "q_mvar": 0.012
+    },
+    {
+      "name": "OfficeBlock",
+      "bus": 4,
+      "p_mw": 0.04,
+      "q_mvar": 0.014
+    },
+    {
+      "name": "EVChargers",
+      "bus": 5,
+      "p_mw": 0.02,
+      "q_mvar": 0.006
+    },
+    {
+      "name": "HeatPumps",
+      "bus": 3,
+      "p_mw": 0.025,
+      "q_mvar": 0.008
+    }
+  ],
+  "sgen": [
+    {
+      "name": "PV_North",
+      "bus": 2,
+      "p_mw": 0.0,
+      "q_mvar": 0.0
+    },
+    {
+      "name": "PV_Commercial",
+      "bus": 4,
+      "p_mw": 0.0,
+      "q_mvar": 0.0
+    },
+    {
+      "name": "PV_Field",
+      "bus": 6,
+      "p_mw": 0.0,
+      "q_mvar": 0.0
+    }
+  ]
+}

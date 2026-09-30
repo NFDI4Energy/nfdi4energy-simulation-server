@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on 2026-09-13 13:17:02.988989 by randomTrips.py UNKNOWN
+<configuration>
+    <net-file value="workshop_network.net.xml"/>
+    <output-trip-file value="background_traffic_30.trips.xml"/>
+    <fringe-factor value="0"/>
+    <allow-fringe.min-length value="0.0"/>
+    <min-distance value="100.0"/>
+    <end value="3200.0"/>
+    <period value="30.0"/>
+</configuration>
+-->
+
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    <trip id="0" depart="0.00" from="B3B2" to="A1B1"/>
+    <trip id="1" depart="30.00" from="B1A1" to="A1B5"/>
+    <trip id="2" depart="60.00" from="B5A1" to="A1B2"/>
+    <trip id="3" depart="90.00" from="B2A1" to="A1B1"/>
+    <trip id="4" depart="120.00" from="A1B5" to="B2B3"/>
+    <trip id="5" depart="150.00" from="A1B1" to="A1B4"/>
+    <trip id="6" depart="180.00" from="B4B5" to="A1B1"/>
+    <trip id="7" depart="210.00" from="B1B2" to="A1B4"/>
+    <trip id="8" depart="240.00" from="B5B4" to="B1B2"/>
+    <trip id="9" depart="270.00" from="A1B2" to="A1B2"/>
+    <trip id="10" depart="300.00" from="B4B5" to="B3B2"/>
+    <trip id="11" depart="330.00" from="B4B5" to="B4A1"/>
+    <trip id="12" depart="360.00" from="B2B3" to="B5B4"/>
+    <trip id="13" depart="390.00" from="B1B5" to="B3A1"/>
+    <trip id="14" depart="420.00" from="B4B5" to="B3B2"/>
+    <trip id="15" depart="450.00" from="B5A1" to="B3A1"/>
+    <trip id="16" depart="480.00" from="B4A1" to="A1B1"/>
+    <trip id="17" depart="510.00" from="A1B2" to="A1B5"/>
+    <trip id="18" depart="540.00" from="B3B2" to="B1B5"/>
+    <trip id="19" depart="570.00" from="B1B5" to="A1B5"/>
+    <trip id="20" depart="600.00" from="B3B2" to="B3B2"/>
+    <trip id="21" depart="630.00" from="A1B4" to="B1B5"/>
+    <trip id="22" depart="660.00" from="B5B4" to="B3B2"/>
+    <trip id="23" depart="690.00" from="B3A1" to="B3B4"/>
+    <trip id="24" depart="720.00" from="B4B5" to="B4B3"/>
+    <trip id="25" depart="750.00" from="A1B5" to="A1B1"/>
+    <trip id="26" depart="780.00" from="B1B2" to="B1A1"/>
+    <trip id="27" depart="810.00" from="A1B5" to="B5B1"/>
+    <trip id="28" depart="840.00" from="B5A1" to="B1B2"/>
+    <trip id="29" depart="870.00" from="B3B4" to="B1B5"/>
+    <trip id="30" depart="900.00" from="B5B1" to="B2B1"/>
+    <trip id="31" depart="930.00" from="B1A1" to="A1B5"/>
+    <trip id="32" depart="960.00" from="B3A1" to="B1A1"/>
+    <trip id="33" depart="990.00" from="B3A1" to="B5A1"/>
+    <trip id="34" depart="1020.00" from="B1B5" to="A1B5"/>
+    <trip id="35" depart="1050.00" from="B5B4" to="B2B3"/>
+    <trip id="36" depart="1080.00" from="A1B2" to="A1B1"/>
+    <trip id="37" depart="1110.00" from="A1B3" to="B3B2"/>
+    <trip id="38" depart="1140.00" from="B4B3" to="B2A1"/>
+    <trip id="39" depart="1170.00" from="A1B2" to="B1B5"/>
+    <trip id="40" depart="1200.00" from="B5B4" to="B2B3"/>
+    <trip id="41" depart="1230.00" from="B5B4" to="B5A1"/>
+    <trip id="42" depart="1260.00" from="B1A1" to="B3B2"/>
+    <trip id="43" depart="1290.00" from="B2B1" to="B5B4"/>
+    <trip id="44" depart="1320.00" from="B5A1" to="B1A1"/>
+    <trip id="45" depart="1350.00" from="B2B3" to="A1B4"/>
+    <trip id="46" depart="1380.00" from="B5B1" to="B5A1"/>
+    <trip id="47" depart="1410.00" from="B1A1" to="B3B2"/>
+    <trip id="48" depart="1440.00" from="B3B2" to="A1B4"/>
+    <trip id="49" depart="1470.00" from="B4B3" to="B2B3"/>
+    <trip id="50" depart="1500.00" from="B4B3" to="B2B3"/>
+    <trip id="51" depart="1530.00" from="A1B1" to="B1B2"/>
+    <trip id="52" depart="1560.00" from="A1B1" to="B5B1"/>
+    <trip id="53" depart="1590.00" from="B1B2" to="A1B2"/>
+    <trip id="54" depart="1620.00" from="B5A1" to="B5B1"/>
+    <trip id="55" depart="1650.00" from="A1B2" to="B2B1"/>
+    <trip id="56" depart="1680.00" from="A1B2" to="B4B3"/>
+    <trip id="57" depart="1710.00" from="B4B3" to="A1B3"/>
+    <trip id="58" depart="1740.00" from="B2B1" to="B2B3"/>
+    <trip id="59" depart="1770.00" from="B1A1" to="B5A1"/>
+    <trip id="60" depart="1800.00" from="B2A1" to="A1B5"/>
+    <trip id="61" depart="1830.00" from="B2B3" to="B4A1"/>
+    <trip id="62" depart="1860.00" from="A1B5" to="B1B2"/>
+    <trip id="63" depart="1890.00" from="B5B4" to="B3B2"/>
+    <trip id="64" depart="1920.00" from="B2A1" to="B2B3"/>
+    <trip id="65" depart="1950.00" from="A1B3" to="A1B5"/>
+    <trip id="66" depart="1980.00" from="B1B2" to="B3A1"/>
+    <trip id="67" depart="2010.00" from="A1B5" to="A1B5"/>
+    <trip id="68" depart="2040.00" from="A1B2" to="B3B2"/>
+    <trip id="69" depart="2070.00" from="A1B5" to="B5B1"/>
+    <trip id="70" depart="2100.00" from="B5A1" to="A1B2"/>
+    <trip id="71" depart="2130.00" from="A1B5" to="B3B4"/>
+    <trip id="72" depart="2160.00" from="A1B5" to="A1B3"/>
+    <trip id="73" depart="2190.00" from="B5B1" to="B3A1"/>
+    <trip id="74" depart="2220.00" from="B2B1" to="B4B3"/>
+    <trip id="75" depart="2250.00" from="B2A1" to="B2B1"/>
+    <trip id="76" depart="2280.00" from="B5B4" to="A1B2"/>
+    <trip id="77" depart="2310.00" from="B2A1" to="B1A1"/>
+    <trip id="78" depart="2340.00" from="A1B5" to="B5B1"/>
+    <trip id="79" depart="2370.00" from="B2A1" to="B5A1"/>
+    <trip id="80" depart="2400.00" from="B3A1" to="A1B2"/>
+    <trip id="81" depart="2430.00" from="B5B4" to="B5B1"/>
+    <trip id="82" depart="2460.00" from="B2B1" to="A1B5"/>
+    <trip id="83" depart="2490.00" from="B1B5" to="B5B4"/>
+    <trip id="84" depart="2520.00" from="B1A1" to="B4B3"/>
+    <trip id="85" depart="2550.00" from="B2B1" to="B2A1"/>
+    <trip id="86" depart="2580.00" from="B5B4" to="B5B4"/>
+    <trip id="87" depart="2610.00" from="B3A1" to="B4A1"/>
+    <trip id="88" depart="2640.00" from="B5B4" to="B3A1"/>
+    <trip id="89" depart="2670.00" from="B2B3" to="B4A1"/>
+    <trip id="90" depart="2700.00" from="B2B3" to="B5A1"/>
+    <trip id="91" depart="2730.00" from="A1B4" to="B5B4"/>
+    <trip id="92" depart="2760.00" from="A1B2" to="A1B4"/>
+    <trip id="93" depart="2790.00" from="B3A1" to="B3B4"/>
+    <trip id="94" depart="2820.00" from="A1B5" to="A1B3"/>
+    <trip id="95" depart="2850.00" from="B3A1" to="B3B2"/>
+    <trip id="96" depart="2880.00" from="B2A1" to="B3A1"/>
+    <trip id="97" depart="2910.00" from="B2B3" to="B5B1"/>
+    <trip id="98" depart="2940.00" from="A1B5" to="B1B5"/>
+    <trip id="99" depart="2970.00" from="B3B4" to="B1A1"/>
+    <trip id="100" depart="3000.00" from="B1B2" to="B4B3"/>
+    <trip id="101" depart="3030.00" from="A1B2" to="B2B1"/>
+    <trip id="102" depart="3060.00" from="B5B4" to="B5B4"/>
+    <trip id="103" depart="3090.00" from="A1B2" to="A1B5"/>
+    <trip id="104" depart="3120.00" from="B5A1" to="B5A1"/>
+    <trip id="105" depart="3150.00" from="B1B5" to="A1B4"/>
+    <trip id="106" depart="3180.00" from="B4B5" to="B4A1"/>
+</routes>

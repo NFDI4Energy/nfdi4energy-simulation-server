@@ -1,0 +1,39 @@
+CXX ?= g++
+
+SRC_DIR := src
+LIB_DIR := lib
+TARGET := $(LIB_DIR)/libsimwrapper.so
+
+CPPFLAGS := -I$(SRC_DIR) -I/usr/local/include/librdkafka
+CXXFLAGS := -fPIC -fpermissive -std=c++17 -w -O2
+LDLIBS := -lavrocpp -lserdes++ -pthread -lrdkafka++ -lcppkafka -lserdes -lrdkafka
+
+SRCS := \
+	$(SRC_DIR)/api/Traffic/Micro/ProvisionHandlerTrafficMicro.cpp \
+	$(SRC_DIR)/communication/AvroHelper.cpp \
+	$(SRC_DIR)/communication/Consumer.cpp \
+	$(SRC_DIR)/communication/MessageHandler.cpp \
+	$(SRC_DIR)/communication/InteractionHandler.cpp \
+	$(SRC_DIR)/communication/kafka/KafkaConsumer.cpp \
+	$(SRC_DIR)/communication/kafka/KafkaProducer.cpp \
+	$(SRC_DIR)/communication/LogHandler.cpp \
+	$(SRC_DIR)/communication/OrchestrationHandler.cpp \
+	$(SRC_DIR)/communication/Producer.cpp \
+	$(SRC_DIR)/communication/ProvisionHandler.cpp \
+	$(SRC_DIR)/communication/TimeSyncHandler.cpp \
+	$(SRC_DIR)/logic/SimulationControl.cpp \
+	$(SRC_DIR)/logic/TimeSync.cpp \
+	$(SRC_DIR)/main/SimulationWrapper.cpp \
+	$(SRC_DIR)/util/Config.cpp \
+	$(SRC_DIR)/util/Utils.cpp
+
+.PHONY: all clean
+
+all: $(TARGET)
+
+$(TARGET): $(SRCS)
+	mkdir -p $(LIB_DIR)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -shared -o $@ $^ $(LDLIBS)
+
+clean:
+	rm -f $(TARGET)

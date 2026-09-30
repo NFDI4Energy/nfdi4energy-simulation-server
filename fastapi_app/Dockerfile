@@ -4,6 +4,8 @@ ENV RABBITMQ_HOST rabbitmq
 ENV REDIS_HOST redis
 ENV RESULTS_DIR /data/results
 ENV RESOURCES_DIR /data/resources
+# Import the canonical fastapi_app package while retaining webapp:app from WORKDIR.
+ENV PYTHONPATH=/
 
 COPY requirements.txt /tmp/
 
@@ -15,8 +17,11 @@ COPY . /fastapi_app
 
 WORKDIR /fastapi_app
 
+# Verify ORM imports and migration against the actual image dependencies, without services or credentials.
+RUN python -c "from fastapi_app.persistence.database import create_database, init_db; from fastapi_app.persistence.migrate_framework import migrate; engine, _ = create_database('sqlite:///:memory:'); init_db(engine); migrate(engine); engine.dispose()"
+
 # expose the app port
 EXPOSE 5001
 
 # run the app server
-CMD ["uvicorn", "webapp:app", "--host", "0.0.0.0", "--port", "5001", "--proxy-headers"]
+CMD ["uvicorn", "webapp:app", "--host", "localhost", "--port", "5001", "--proxy-headers", "--ssl-keyfile", "/certs/key.pem", "--ssl-certfile", "/certs/cert.pem"]

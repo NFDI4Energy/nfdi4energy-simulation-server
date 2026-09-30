@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: task-framework-migration-
+  namespace: simservice
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 180
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: migrate
+          image: simaas-web:latest
+          imagePullPolicy: Never
+          command: ["python", "-m", "fastapi_app.persistence.migrate_framework"]
+          envFrom:
+            - secretRef:
+                name: web-secret

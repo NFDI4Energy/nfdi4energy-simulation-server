@@ -1,0 +1,13 @@
+**/.git
+**/build
+**/obj
+**/*.a
+**/*.d
+**/*.o
+**/*.so
+**/*.so.*
+
+CppBaseWrapper/avro
+CppBaseWrapper/lib
+SumoWrapper/bin
+SumoWrapper/SumoWrapper

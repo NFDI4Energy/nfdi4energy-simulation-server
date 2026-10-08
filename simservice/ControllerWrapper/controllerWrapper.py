@@ -172,6 +172,7 @@ class ControllerWrapper:
         self.vehicle_consumers = {}  # label -> KafkaConsumer
         self.setpoint_producer = None
         self.stations = {}  # label -> StationState
+        self.current_sim_time = 0
 
     def log(self, msg):
         print(f"[{self.instanceID}] {msg}", flush=True)
@@ -258,14 +259,21 @@ class ControllerWrapper:
             station = self.stations[label]
             topic = self.vehicle_topics[label]
             saw_ev_this_step = False
-            for _ in range(500):
-                msg = consumer.poll(0.02)
+            # Ein leerer poll() heisst NICHT, dass der Rueckstand leer ist -
+            # Kafka liefert in Batches, zwischen denen leicht mehr als der
+            # Poll-Timeout vergeht. Beim ersten None abzubrechen laesst
+            # Nachrichten liegen; TimeSync wartet dann in msgCountOK()
+            # volle 10 s (100 x 0.1 s) auf den timeoutHandler. Darum:
+            # mehrere Leerlaeufe hintereinander tolerieren und laenger warten.
+            empty_polls = 0
+            for _ in range(2000):
+                msg = consumer.poll(0.1)
                 if msg is None or msg.error():
-                    break
-                # JEDE Nachricht zaehlt fuer TimeSync, auch Hintergrundverkehr -
-                # SUMOs Producer::countingSentMessages kennt keinen Unterschied
-                # zwischen ev_-Fahrzeugen und Hintergrundverkehr auf derselben Edge.
-                self.timeSync.notifiyAboutReceivedMessage(topic, 1)
+                    empty_polls += 1
+                    if empty_polls >= 3:
+                        break
+                    continue
+                empty_polls = 0
                 vehicle = msg.value()
                 if not isinstance(vehicle, dict):
                     continue
@@ -282,24 +290,32 @@ class ControllerWrapper:
         self.wait_for_scenario()
         self.setup_kafka()
 
-        step_size = self.sim_config.get('stepLength', 60)
-        sim_end = self.scenario_data.get('simulationEnd', 3200)
-        n_steps = max(1, sim_end // step_size)
-        dt_hours = step_size / 3600.0
+        # EINHEITEN: Die C++-Seite (SumoWrapper) rechnet TimeSync in
+        # MILLISEKUNDEN - sie liest stepLength direkt als ms und rechnet
+        # simulationEnd * 1000. Die Python-Wrapper haben stepLength bisher
+        # als reine Zahl uebernommen, wodurch ihre Zeitachse (bis 3400)
+        # um Faktor 1000 unter SUMOs Achse (bis 3.400.000) lag. Da
+        # lbts = min(alle angeforderten Zeiten), war timeOK() fuer den
+        # Controller praktisch sofort immer erfuellt -> er rannte in 13s
+        # durch, waehrend SUMO noch lief.
+        step_size_ms = self.sim_config.get('stepLength', 60000)
+        sim_end_ms = self.scenario_data.get('simulationEnd', 3200) * 1000
+        n_steps = max(1, sim_end_ms // step_size_ms)
+        dt_hours = step_size_ms / 3600000.0
 
-        # WICHTIG: Muss VOR joinTiming()/dem ersten timeAdvance() passieren.
-        # Ohne addExpectedTopic() ist expectedReceiveCount leer und
-        # timeAdvance()'s zweite Wartschleife ("warte auf alle angekuendigten
-        # Nachrichten") ist ein reiner No-Op - der Controller kann dann
-        # beliebig weit vor SUMOs tatsaechlichem Fortschritt herlaufen
-        # (genau das Symptom: Controller fertig in 13s, SUMO noch bei 32s+).
-        # Die C++-Seite zaehlt und kuendigt ihre gesendeten Nachrichten pro
-        # Topic bereits automatisch an (Producer::countingSentMessages) -
-        # es fehlte nur die Python-seitige Erwartungs-Registrierung.
         synced = self.scenario_data.get('execution', {}).get('syncedParticipants', 3)
+        # NUR zeitbasierte Synchronisation (LBTS). Bewusst KEIN
+        # addExpectedTopic(): TimeSync.msgCountOK() ruft seinen
+        # timeoutHandler nur im Zweig "Topic noch nie empfangen" - sobald
+        # ein Topic mindestens eine Nachricht hat, wartet es im zweiten
+        # Zweig endlos, ohne je wieder zu pollen (Deadlock bei
+        # "msgCount OK? NO! ... 102 / 185"). Seit der ms-Korrektur haelt
+        # die Zeitsynchronisation den Controller ohnehin zuverlaessig auf
+        # SUMOs Fortschritt zurueck; die Nachrichtenzaehlung ist eine
+        # zweite, fragile Sicherung, die wir hier nicht brauchen. Ein
+        # Fahrzeug-Update kann dadurch hoechstens einen Schritt spaeter
+        # ankommen - fuer die Demo ohne Bedeutung.
         self.timeSync = TimeSync(self.broker, self.registry, self.topic_time, self.kid + ".ts", synced, logging=False)
-        for topic in self.vehicle_topics.values():
-            self.timeSync.addExpectedTopic(topic)
         self.timeSync.joinTiming()
         self.log("TimeSync joined. Running simulation...")
 
@@ -309,10 +325,19 @@ class ControllerWrapper:
         load_by_label = {e['label']: e['pandapower_load'] for e in self.station_mapping}
 
         for step in range(n_steps):
-            self.timeSync.timeAdvance(step_size)
-            sim_time = step * step_size
+            # sim_time bleibt in SEKUNDEN - das ist die Einheit, in der
+            # Ankunftszeiten, charging_log.csv und die ChargingSetpoint-
+            # Nachrichten gelesen werden. Nur TimeSync rechnet in ms.
+            sim_time = step * step_size_ms // 1000
+            self.current_sim_time = sim_time
 
+            # WICHTIG: Polling MUSS vor timeAdvance() laufen. timeAdvance()
+            # blockiert, bis alle von SUMO angekuendigten Nachrichten als
+            # empfangen gemeldet wurden - gemeldet werden sie aber genau
+            # hier. Stuende der Poll danach, warteten beide aufeinander
+            # (Deadlock: "never received a message on ... supposed to have N").
             self.poll_vehicle_presence(sim_time)
+            self.timeSync.timeAdvance(step_size_ms)
 
             requests = {
                 label: station.requested_power_kW(max_power_by_label[label])

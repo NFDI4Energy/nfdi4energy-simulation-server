@@ -165,9 +165,12 @@ class PandapowerWrapper:
         self.log(f"Loading network: {net_path}")
         self.event_emitter.emit("SIMULATION", "NETWORK_LOADING_STARTED", "Loading PandaPower network")
         
-        step_size = self.sim_config.get('stepLength', 1000)
-        sim_end = self.scenario_data.get('simulationEnd', 1000)
-        n_steps = max(1, sim_end // step_size)
+        # TimeSync rechnet in Millisekunden: die C++-Seite (SumoWrapper)
+        # liest stepLength direkt als ms und rechnet simulationEnd * 1000.
+        step_size_ms = self.sim_config.get('stepLength', 60000)
+        sim_end_ms = self.scenario_data.get('simulationEnd', 3200) * 1000
+        n_steps = max(1, sim_end_ms // step_size_ms)
+        step_size_s = step_size_ms // 1000
         parameters = self.sim_config.get('parameters', {}) or {}
         step_delay_seconds = parse_float(
             parameters.get('stepDelaySeconds'),
@@ -177,7 +180,7 @@ class PandapowerWrapper:
             step_delay_seconds = parse_float(parameters.get('stepDelayMs'), 0.0) / 1000.0
         step_delay_seconds = max(0.0, step_delay_seconds)
         
-        self.api = pandapowerAPI(net_path, step_size, n_steps, self.results_dir)
+        self.api = pandapowerAPI(net_path, step_size_s, n_steps, self.results_dir)
         try:
             self.api.init()
             self.event_emitter.emit("SIMULATION", "NETWORK_LOADED", "PandaPower network loaded")
@@ -200,12 +203,13 @@ class PandapowerWrapper:
             self.event_emitter.emit("PROGRESS", "SIMULATION_STARTED", "PandaPower simulation started", progress=0.20, simulation_time=0)
 
             for step in range(n_steps):
-                self.timeSync.timeAdvance(step_size)
+                #self.timeSync.timeAdvance(step_size)
+                self.timeSync.timeAdvance(step_size_ms)
                 self.log(f"Step {step}")
                 self.api.prepareStep(step)
                 self.apply_pending_charging_setpoints()
                 converged = self.api.step(step)
-                simulation_time = step * step_size
+                simulation_time = step * step_size_s
                 progress = 0.20 + (0.70 * ((step + 1) / n_steps))
                 metrics = self.api.get_metric_snapshot()
                 self.event_emitter.metric_snapshot(

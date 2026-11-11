@@ -10,6 +10,8 @@ class Settings:
     redis_host: str = "redis"
     database_url: str = "sqlite:///./simserver_dev.db"
     session_secret: str = field(default="", repr=False)
+    # "production" unless SIMAAS_ENV says otherwise; the local-login bypass only works in "development".
+    environment: str = "production"
     auth_disabled: bool = False
     session_https_only: bool = False
     mosaik_enabled: bool = True
@@ -32,6 +34,7 @@ class Settings:
             redis_host=os.getenv("REDIS_HOST", cls.redis_host),
             database_url=os.getenv("DATABASE_URL", cls.database_url),
             session_secret=os.getenv("SESSION_SECRET", ""),
+            environment=os.getenv("SIMAAS_ENV", cls.environment).strip().lower(),
             auth_disabled=os.getenv("AUTH_DISABLED", "false").strip().lower() == "true",
             session_https_only=os.getenv("SESSION_HTTPS_ONLY", "false").strip().lower() == "true",
             mosaik_enabled=os.getenv("MOSAIK_ENABLED", "true").strip().lower() == "true",
@@ -50,6 +53,10 @@ class Settings:
     def validate(self):
         if not self.session_secret:
             raise RuntimeError("SESSION_SECRET must be configured")
+        if self.environment not in {"development", "production"}:
+            raise RuntimeError("SIMAAS_ENV must be development or production")
+        if self.auth_disabled and self.environment != "development":
+            raise RuntimeError("AUTH_DISABLED=true is only allowed with SIMAAS_ENV=development")
         if not self.auth_disabled and (not self.oidc_client_id or not self.oidc_client_secret):
             raise RuntimeError("OIDC_CLIENT_ID and OIDC_CLIENT_SECRET must be configured")
         if min(self.scenario_limit, self.resource_limit, self.total_limit, self.resource_count) <= 0:

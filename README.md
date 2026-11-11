@@ -97,9 +97,11 @@ chmod 600 .env
 openssl rand -hex 32
 ```
 
-Set `AUTH_DISABLED=true` in `.env`, use the generated value for `SESSION_SECRET`,
-and set `DB_PASSWORD` (keep the existing password if the database already exists).
-`OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET` can be left blank.
+Set `SIMAAS_ENV=development` and `AUTH_DISABLED=true` in `.env`, use the generated
+value for `SESSION_SECRET`, and set `DB_PASSWORD` (keep the existing password if the
+database already exists). `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET` can be left blank.
+The web application refuses to start with `AUTH_DISABLED=true` unless
+`SIMAAS_ENV=development`, so the bypass cannot reach a production deployment by accident.
 
 Follow the [deployment guide](docs/deployment-guide.md) for TLS certificates,
 Minikube, and the data mount. Then, from the repository root:
@@ -119,7 +121,8 @@ in, and choose a framework.
 In local mode, **Sign in** opens a shared development account without an external
 login. Use this mode only on your own trusted machine, not a public deployment.
 To use OIDC instead, set `AUTH_DISABLED=false`, supply the OIDC credentials in
-`.env`, and rerun the build script.
+`.env`, and rerun the build script. The OIDC client must be registered with the
+redirect URI `https://<host>/auth/callback` (`OIDC_REDIRECT_URI`).
 
 Open Mosaik's **Create scenario** action to access the editor at
 **https://localhost:8002/mosaik/** using your current login. Both forwarded ports

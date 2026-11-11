@@ -225,6 +225,16 @@ case "${AUTH_DISABLED}" in
     *) fail "AUTH_DISABLED must be true or false" ;;
 esac
 
+# The web application refuses AUTH_DISABLED=true unless SIMAAS_ENV=development.
+SIMAAS_ENV="${SIMAAS_ENV:-production}"
+case "${SIMAAS_ENV}" in
+    development|production) ;;
+    *) fail "SIMAAS_ENV must be development or production" ;;
+esac
+if [[ "${AUTH_DISABLED}" == "true" && "${SIMAAS_ENV}" != "development" ]]; then
+    fail "AUTH_DISABLED=true requires SIMAAS_ENV=development in ${ENV_FILE}"
+fi
+
 for variable_name in DB_PASSWORD SESSION_SECRET; do
     require_value "${variable_name}"
 done
@@ -307,7 +317,7 @@ TEMP_DIR=""
 
 log "Applying the full Minikube stack"
 kubectl apply -f "${MANIFEST}"
-kubectl -n "${NAMESPACE}" set env deployment/web AUTH_DISABLED="${AUTH_DISABLED}"
+kubectl -n "${NAMESPACE}" set env deployment/web SIMAAS_ENV="${SIMAAS_ENV}" AUTH_DISABLED="${AUTH_DISABLED}"
 kubectl -n "${NAMESPACE}" set env deployment/web SESSION_HTTPS_ONLY=true OIDC_REDIRECT_URI="${SIM_SERVER_URL}/auth/callback"
 python3 - "${SIM_SERVER_HOST}" <<'PY' | kubectl apply -f -
 import json, sys

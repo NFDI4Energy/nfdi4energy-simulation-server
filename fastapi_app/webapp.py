@@ -30,6 +30,8 @@ from fastapi_app.frameworks.mosaik.editor import router as mosaik_editor_router
 
 logger = logging.getLogger(__name__)
 SERVER_ROOT = Path(__file__).resolve().parent
+# Cookie attributes besides Secure, which SESSION_HTTPS_ONLY controls (build-minikube.sh sets it to true).
+SESSION_COOKIE = {"same_site": "lax"}
 
 
 def mount_dashboard(app, dist_dir=None):
@@ -45,7 +47,8 @@ def mount_dashboard(app, dist_dir=None):
 def create_app(settings=None):
     settings = settings or Settings.from_env()
     app = FastAPI()
-    app.add_middleware(SessionMiddleware, secret_key=settings.session_secret, https_only=settings.session_https_only)
+    app.add_middleware(SessionMiddleware, secret_key=settings.session_secret,
+                       https_only=settings.session_https_only, **SESSION_COOKIE)
     app.include_router(auth_router)
     app.include_router(dacedsx_router)
     app.include_router(mosaik_router)

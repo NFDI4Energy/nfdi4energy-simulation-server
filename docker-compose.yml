@@ -18,6 +18,7 @@ services:
       - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:?set OIDC_CLIENT_SECRET in .env}
       - OIDC_DISCOVERY_URL=https://regapp.nfdi-aai.de/oidc/realms/nfdi/.well-known/openid-configuration
       - SESSION_SECRET=${SESSION_SECRET:?set SESSION_SECRET in .env}
+      - SIMAAS_ENV=${SIMAAS_ENV:-production}
       - MOSAIK_ENABLED=${MOSAIK_ENABLED:-true}
     depends_on:
       - redis

@@ -37,7 +37,9 @@ openssl rand -hex 32
 
 Edit `.env` locally:
 
+- `SIMAAS_ENV=development`: marks this as a local machine. Required for the next line.
 - `AUTH_DISABLED=true`: local login without OIDC, using a shared development account.
+  The web application refuses to start with this setting unless `SIMAAS_ENV=development`.
 - `SIM_SERVER_HOST=localhost` and `SIM_SERVER_URL=https://localhost:5001` for the
   local Ingress forward below. For separate users, use your deployment hostname
   and HTTPS origin, set `AUTH_DISABLED=false`, and register that origin's

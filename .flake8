@@ -1,3 +1,10 @@
 [flake8]
-exclude = meta/migrations/, docs/
-max-line-length=100
+# Only pyflakes errors and syntax errors gate CI. Style rules (E1-E7, W) are not
+# enforced yet: the code base predates this config and will not be reformatted
+# in passing. Enable them per package once a module is touched for other reasons.
+select = E9,F
+max-line-length = 120
+exclude = .git,__pycache__,node_modules,frontend,fastapi_app/static,simservice,artifacts
+# Legacy MVS/Celery worker that is not built or deployed; left untouched until it is removed.
+per-file-ignores =
+    task_queue/tasks.py: F401,F841

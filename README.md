@@ -82,7 +82,8 @@ sequenceDiagram
 
 ## Prerequisites
 
-- Docker, Minikube, kubectl, Git, Node.js/npm, Python 3, OpenSSL, curl, and tar.
+- Docker, Minikube, kubectl, Git, Python 3, OpenSSL, curl, and tar. Node.js/npm is
+  only needed to run the frontend outside Docker; the web image builds the dashboard itself.
 - The build script installs Helm 3 locally if Helm is missing; no `sudo` needed.
 - OIDC credentials are optional for local development.
 

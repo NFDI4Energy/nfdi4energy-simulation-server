@@ -1,3 +1,16 @@
+# Build context is the repository root: docker build -f fastapi_app/Dockerfile .
+
+# Stage 1: build the Svelte dashboard so the checkout never needs a committed bundle.
+FROM node:22-alpine AS dashboard
+
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+# vite.config.js writes to ../fastapi_app/static/svelte-dist relative to /frontend.
+RUN mkdir -p /fastapi_app/static && npm run build
+
+# Stage 2: the web application and the log consumer.
 FROM tiangolo/uvicorn-gunicorn-fastapi:python3.8
 
 ENV RABBITMQ_HOST rabbitmq
@@ -7,13 +20,14 @@ ENV RESOURCES_DIR /data/resources
 # Import the canonical fastapi_app package while retaining webapp:app from WORKDIR.
 ENV PYTHONPATH=/
 
-COPY requirements.txt /tmp/
+COPY fastapi_app/requirements.txt /tmp/
 
 # install requirements
 RUN python -m pip install --upgrade pip
 RUN pip install -r /tmp/requirements.txt
 
-COPY . /fastapi_app
+COPY fastapi_app/ /fastapi_app
+COPY --from=dashboard /fastapi_app/static/svelte-dist /fastapi_app/static/svelte-dist
 
 WORKDIR /fastapi_app
 

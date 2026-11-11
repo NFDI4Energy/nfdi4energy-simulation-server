@@ -32,6 +32,16 @@ logger = logging.getLogger(__name__)
 SERVER_ROOT = Path(__file__).resolve().parent
 
 
+def mount_dashboard(app, dist_dir=None):
+    """Serve the built dashboard when present; the image builds it, a checkout may not have it."""
+    dist_dir = Path(dist_dir) if dist_dir else SERVER_ROOT / "static/svelte-dist"
+    if not dist_dir.is_dir():
+        logger.warning("Dashboard bundle %s is missing; run `npm run build` in frontend/ to serve /dashboard", dist_dir)
+        return False
+    app.mount("/dashboard", StaticFiles(directory=str(dist_dir), html=True), name="dashboard")
+    return True
+
+
 def create_app(settings=None):
     settings = settings or Settings.from_env()
     app = FastAPI()
@@ -43,7 +53,7 @@ def create_app(settings=None):
     app.include_router(task_router)
     app.include_router(monitor_router)
     app.mount("/static", StaticFiles(directory=str(SERVER_ROOT / "static")), name="static")
-    app.mount("/dashboard", StaticFiles(directory=str(SERVER_ROOT / "static/svelte-dist"), html=True), name="dashboard")
+    mount_dashboard(app)
     templates = Jinja2Templates(directory=str(SERVER_ROOT / "templates"))
 
     @app.on_event("startup")

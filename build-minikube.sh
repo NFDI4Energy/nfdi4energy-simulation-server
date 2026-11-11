@@ -130,9 +130,10 @@ require_value() {
 build_image() {
     local tag="$1"
     local context="$2"
+    local dockerfile="${3:-${context}/Dockerfile}"
 
     log "Building ${tag}"
-    docker build --tag "${tag}" "${context}"
+    docker build --tag "${tag}" --file "${dockerfile}" "${context}"
 }
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
@@ -142,7 +143,7 @@ fi
 
 [[ $# -eq 0 ]] || fail "Unknown argument: $1"
 
-for command_name in minikube kubectl docker npm python3 openssl; do
+for command_name in minikube kubectl docker python3 openssl; do
     require_command "${command_name}"
 done
 ensure_helm
@@ -246,11 +247,8 @@ log "Using Minikube profile ${PROFILE}"
 eval "$(minikube -p "${PROFILE}" docker-env --shell bash)"
 docker info >/dev/null
 
-log "Building frontend assets"
-npm --prefix "${ROOT_DIR}/frontend" ci
-npm --prefix "${ROOT_DIR}/frontend" run build
-
-build_image "simaas-web:latest" "${ROOT_DIR}/fastapi_app"
+# The web image builds the dashboard itself; its context is the repository root.
+build_image "simaas-web:latest" "${ROOT_DIR}" "${ROOT_DIR}/fastapi_app/Dockerfile"
 build_image "simservice/simservice:latest" "${ROOT_DIR}/simservice"
 build_image "simservice/pandapowerwrapper-wrapper:latest" "${ROOT_DIR}/simservice/PandaPowerWrapper"
 build_image "simservice/sumowrapper-wrapper:latest" "${ROOT_DIR}/simservice/cppbase+sumowrapper"

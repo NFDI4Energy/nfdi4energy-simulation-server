@@ -1,0 +1,24 @@
+# Build context is the repository root (docker build -f fastapi_app/Dockerfile .).
+# Keep only what the web image needs: fastapi_app/ and the frontend sources.
+.git
+.github
+.idea
+.vscode
+.env
+.env.example
+*.md
+docs
+data
+certs
+examples
+mosaik
+simservice
+task_queue
+artifacts
+fastapi_app/tests
+fastapi_app/static/svelte-dist
+frontend/node_modules
+frontend/tests
+**/__pycache__
+**/*.pyc
+**/*.db

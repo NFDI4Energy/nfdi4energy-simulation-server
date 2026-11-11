@@ -1,7 +1,9 @@
 # Deploy on a New Machine
 
-For a local Linux setup. Install **Docker, Minikube, kubectl, Git,
-Node.js 22/npm, Python 3, OpenSSL, curl, and tar** first. Docker must work without `sudo`.
+For a local Linux setup. Install **Docker, Minikube, kubectl, Git, Python 3,
+OpenSSL, curl, and tar** first. Docker must work without `sudo`. Node.js 22/npm is
+only needed to run the frontend outside Docker (`npm run build` in `frontend/`
+writes `fastapi_app/static/svelte-dist/`, which is not tracked in Git).
 The build script reuses Helm if available, otherwise it installs Helm 3 into your
 user cache with checksum verification, without `sudo`.
 
@@ -86,9 +88,9 @@ In a second terminal:
 bash build-minikube.sh
 ```
 
-This builds the frontend, backend, DaceDSX worker, wrappers, and Mosaik worker.
-The Mosaik editor and Orbit use prebuilt registry images. The first SUMO build
-can take a long time.
+This builds the web image (which compiles the dashboard in a Node build stage),
+the DaceDSX worker, the wrappers, and the Mosaik worker. The Mosaik editor and
+Orbit use prebuilt registry images. The first SUMO build can take a long time.
 
 The script installs Traefik, creates the Ingress TLS Secret, and generates separate
 broker credentials in `.broker-secrets.env` (ignored by Git). Keep this file and

@@ -2,7 +2,8 @@ version: "3"
 services:
   web:
     build:
-      context: ./fastapi_app
+      context: .
+      dockerfile: fastapi_app/Dockerfile
     ports: ["127.0.0.1:5001:5001", "127.0.0.1:8002:5001"]
     networks: [sim_network]
     command: ["uvicorn", "webapp:app", "--host", "0.0.0.0", "--port", "5001", "--proxy-headers", "--ssl-keyfile", "/certs/key.pem", "--ssl-certfile", "/certs/cert.pem"]

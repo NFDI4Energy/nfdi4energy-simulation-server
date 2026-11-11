@@ -14,3 +14,6 @@ certs/
 # Runtime task data mounted into Minikube.
 /data/resources/*/
 /data/results/*/
+
+# Built dashboard; produced by `npm run build` in frontend/ and by the web image build.
+/fastapi_app/static/svelte-dist/

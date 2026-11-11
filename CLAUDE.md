@@ -95,7 +95,7 @@ Solange keine Antwort vorliegt, mit diesen Annahmen arbeiten und sie in der Phas
 5. Executor: `local` bleibt Default, `kubernetes` per Konfiguration.
 
 Antworten der Maintainer (ersetzen die Annahmen oben):
-- noch keine
+- zugestimmt
 
 ## Wenn etwas blockiert
 Nicht raten und nicht still überspringen. Blockade in ROADMAP.md und Phasendoku notieren, mit dem

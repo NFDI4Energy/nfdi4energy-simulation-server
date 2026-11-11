@@ -32,6 +32,8 @@ Here is a template for new release sections
 ### Changed
 - Fixed async function (#5)
 - Convert json from EPA to MVS format (#6)
+- pandapower wrapper image refuses pickle networks and pandapower JSON that references
+  classes outside pandapower/pandas; same fix as upstream DaceDSX PR 0 (roadmap #3)
 
 ### Removed
 - `simservice/nohup.out`, a stray Minikube mount log with a local home path (roadmap #2)

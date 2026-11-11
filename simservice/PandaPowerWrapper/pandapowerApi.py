@@ -4,6 +4,8 @@ import numpy as np
 import pandapower as pp
 import json
 
+from network_loader import load_network
+
 pd.options.mode.chained_assignment = None
 
 
@@ -77,23 +79,7 @@ class pandapowerAPI:
 
     def init(self):
         p = Path(self.network_path)
-        if not p.exists():
-            raise FileNotFoundError(f"Network not found: {self.network_path}")
-
-        ext = p.suffix.lower()
-        if ext == ".json":
-            with open(p, 'r') as f:
-                data = json.load(f)
-            if '_module' in data:
-                self.network = pp.from_json(str(p))
-            else:
-                self.network = self.build_network(data)
-        elif ext in (".xlsx", ".xls"):
-            self.network = pp.from_excel(str(p))
-        elif ext == ".p":
-            self.network = pp.from_pickle(str(p))
-        else:
-            raise RuntimeError(f"Unsupported format: {ext}")
+        self.network = load_network(p, self.build_network)
 
         folder = p.parent
         load_csv, load_json = folder / "load_profile.csv", folder / "load_profile.json"

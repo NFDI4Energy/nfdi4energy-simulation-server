@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir pandapower pandas avro numpy openpyxl confluent-k
 COPY PythonBaseWrapper /app/PythonBaseWrapper
 COPY AvroSchemas /app/AvroSchemas
 
+COPY network_loader.py /app/
 COPY pandapowerApi.py /app/
 COPY pandapowerWrapper.py /app/
 COPY simulation_event_emitter.py /app/

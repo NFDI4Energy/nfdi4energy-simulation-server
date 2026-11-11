@@ -26,12 +26,15 @@ Here is a template for new release sections
 - disclaimer about data safety on index page (#9)
 - input json is returned in case of EPA->MVS conversion or simulation error (#9)
 - possibility to pin mvs version centrally in `.env` file (#12)
+- backend test suite under `fastapi_app/tests/` (Mosaik toggle) (roadmap #4)
+- planning documents: `ROADMAP.md`, `TODO.md`, DaceDSX patch inventory, agent prompt
 
 ### Changed
 - Fixed async function (#5)
 - Convert json from EPA to MVS format (#6)
 
 ### Removed
+- `simservice/nohup.out`, a stray Minikube mount log with a local home path (roadmap #2)
 
 
 

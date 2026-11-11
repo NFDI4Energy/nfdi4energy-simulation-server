@@ -18,11 +18,11 @@ Für den **öffentlichen Betrieb** müssen die Phasen 0 bis 7 abgeschlossen sein
 ## Phase 0: Sofort (unabhängig, Datenschutz und Sicherheit)
 
 1. [x] `[DaceDSX]` Branch `Simulation-Server` löschen lassen und GitHub-Support bitten, Commit `1d96071e16901d79235ce9948f54a1b4d0b37604` zu entfernen (beides macht ein Admin von cs7org). Die betroffene Person informieren.
-2. [ ] `[SimaaS]` `simservice/nohup.out` löschen.
-3. [ ] `[DaceDSX]` **PR 0** einreichen: pandapower lehnt Pickle und JSON mit `_module` ab.
-4. [ ] `[SimaaS]` Entscheidung: Mosaik bleibt vorerst nicht öffentlich, bis Phase 5 erledigt ist (Nutzer-Code ohne Sandbox, `mosaik-gui` ohne Authentifizierung).
-5. [ ] `[DaceDSX]` Termin mit den Maintainern: Plan vorstellen, die 5 offenen Fragen aus dem Patch-Inventar klären (große Ressourcen, pandapower-Modus, Release-Prozess, Event-Schema, Executor-Default). Issues für PR 3 und PR 8 eröffnen. Davon hängt fast alles in Phase 2 und 3 ab.
-6. [ ] `[DaceDSX]` Vollständig gemergte Branches löschen: `FAIRer_DaceDS`, `PyPSA_Wrapper`, `minor_bugfix_after_license_change`, `opendss-fresh-test`, `readme-update`, `sumo_pandapower_co_sim`, `update-branch-1` (im selben Termin absprechen).
+2. [x] `[SimaaS]` `simservice/nohup.out` löschen. (Branch: `roadmap/phase-0a-cleanup-mosaik-off`)
+3. [~] `[DaceDSX]` **PR 0** einreichen: pandapower lehnt Pickle und JSON mit `_module` ab. (Branch: `simaas/pr0-pandapower-safe-load` in DaceDSX, SimaaS-Kopie in `roadmap/phase-0c-pandapower-guard`; fehlt: PR öffnen, Text in `docs/changes/dacedsx-pr0.md`. Abweichung: JSON mit `_module` wird per Allowlist geprüft statt pauschal abgelehnt, Pickle per `PANDAPOWER_ALLOW_PICKLE=true` als Opt-in)
+4. [x] `[SimaaS]` Entscheidung: Mosaik bleibt vorerst nicht öffentlich, bis Phase 5 erledigt ist (Nutzer-Code ohne Sandbox, `mosaik-gui` ohne Authentifizierung). (Branch: `roadmap/phase-0a-cleanup-mosaik-off`; Entscheidung am 2026-11-12 revidiert: Mosaik bleibt aktiv, weil `main` inzwischen Editor-Login und Task-Pods hat; Rest von 41 offen)
+5. [ ] `[DaceDSX]` Termin mit den Maintainern: Plan vorstellen, die 5 offenen Fragen aus dem Patch-Inventar klären (große Ressourcen, pandapower-Modus, Release-Prozess, Event-Schema, Executor-Default). Issues für PR 3 und PR 8 eröffnen. Davon hängt fast alles in Phase 2 und 3 ab. ⚠ menschlicher Schritt, Agenda in `docs/changes/phase-0.md`
+6. [ ] `[DaceDSX]` Vollständig gemergte Branches löschen: `FAIRer_DaceDS`, `PyPSA_Wrapper`, `minor_bugfix_after_license_change`, `opendss-fresh-test`, `readme-update`, `sumo_pandapower_co_sim`, `update-branch-1` (im selben Termin absprechen). ⚠ menschlicher Schritt
 
 ## Phase 1: Grundlage im SimaaS ⇉ parallel zu Phase 2
 

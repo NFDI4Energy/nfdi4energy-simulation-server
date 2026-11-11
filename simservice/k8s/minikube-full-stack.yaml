@@ -850,6 +850,7 @@ metadata:
   namespace: simservice
 data:
   MOSAIK_ENABLED: "true"
+  MOSAIK_GUI_URL: http://mosaik-gui.simservice.svc.cluster.local
   MOSAIK_BAKE_TIMEOUT: "120"
   MOSAIK_RUN_TIMEOUT: "3600"
 ---

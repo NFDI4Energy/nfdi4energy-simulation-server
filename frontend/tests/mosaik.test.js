@@ -26,7 +26,7 @@ test('scenario authoring opens the external GUI in a separate protected tab', ()
   assert.equal(attr('rel').data, 'noopener noreferrer');
   assert.equal(attr('href').expression.name, 'guiUrl');
   const declaration = ast.instance.content.body.flatMap(node => node.declarations || []).find(node => node.id.name === 'guiUrl');
-  assert.equal(declaration.init.value, 'http://localhost:8002');
+  assert.equal(declaration.init.value, '/mosaik/');
 });
 
 test('polling serializes reads and stops on terminal state', async () => {

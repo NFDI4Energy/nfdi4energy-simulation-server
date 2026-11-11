@@ -8,6 +8,7 @@ pika
 pydantic
 authlib
 httpx
+websockets==13.1
 itsdangerous
 SQLAlchemy==2.0.46
 psycopg2-binary

@@ -99,15 +99,16 @@ Run each command in its own terminal and leave it running:
 kubectl -n simservice port-forward service/web 5001:5001
 ```
 
-```bash
-kubectl -n simservice port-forward service/mosaik-gui 8002:80
-```
-
 - **Main app:** https://localhost:5001
-- **Mosaik editor:** http://localhost:8002
+- **Mosaik editor:** https://localhost:5001/mosaik/ (requires the same login)
 
 Expect a browser warning for the self-signed certificate. Sign in and choose a
 framework. Keep access local; do not expose these forwards publicly.
+
+Use **Create scenario** to open the editor through the web application's
+authenticated HTTP and WebSocket proxy. Do not publish or port-forward the
+internal `mosaik-gui` or `mosaik-orbit` services. Stop any old editor port-forward
+on port 8002; applying the manifest does not terminate a running port-forward.
 
 Test one Pandapower run, one SUMO run, and one known-good Mosaik scenario. Verify
 completion and downloads. The maintainers supplied these Save/Load-enabled images;

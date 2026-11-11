@@ -12,6 +12,7 @@ class Settings:
     session_secret: str = field(default="", repr=False)
     auth_disabled: bool = False
     mosaik_enabled: bool = True
+    mosaik_gui_url: str = "http://mosaik-gui"
     rabbitmq_host: str = "rabbitmq"
     oidc_client_id: str = ""
     oidc_client_secret: str = field(default="", repr=False)
@@ -32,6 +33,7 @@ class Settings:
             session_secret=os.getenv("SESSION_SECRET", ""),
             auth_disabled=os.getenv("AUTH_DISABLED", "false").strip().lower() == "true",
             mosaik_enabled=os.getenv("MOSAIK_ENABLED", "true").strip().lower() == "true",
+            mosaik_gui_url=os.getenv("MOSAIK_GUI_URL", cls.mosaik_gui_url),
             rabbitmq_host=os.getenv("RABBITMQ_HOST", cls.rabbitmq_host),
             oidc_client_id=os.getenv("OIDC_CLIENT_ID", ""),
             oidc_client_secret=os.getenv("OIDC_CLIENT_SECRET", ""),

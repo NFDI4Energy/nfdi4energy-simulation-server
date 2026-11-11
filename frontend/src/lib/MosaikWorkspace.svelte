@@ -4,7 +4,7 @@
   export let user;
   export let onSwitchFramework = () => {};
   export let onLogout = () => {};
-  const guiUrl = const guiUrl = `http://${window.location.hostname}:8002`;
+  const guiUrl = '/mosaik/';
   let view = 'new';
   let file = null;
   let submitting = false;

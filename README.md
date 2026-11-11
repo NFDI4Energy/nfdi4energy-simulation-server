@@ -118,15 +118,10 @@ login. Use this mode only on your own trusted machine, not a public deployment.
 To use OIDC instead, set `AUTH_DISABLED=false`, supply the OIDC credentials in
 `.env`, and rerun the build script.
 
-Framework editors may need a separate port-forward. For example, to use Mosaik's
-**Create scenario** action, run this in another terminal:
-
-```bash
-kubectl -n simservice port-forward service/mosaik-gui 8002:80
-```
-
-The Mosaik editor is available at **http://localhost:8002**. See the deployment
-guide for framework-specific services and configuration.
+Open Mosaik's **Create scenario** action to access the editor at
+**https://localhost:5001/mosaik/** using your current login. The editor and its
+WebSocket connection are accessed through the web application; no editor
+port-forward is needed.
 
 Inputs are stored under `/data/resources/{task_id}/`; results are saved under
 `/data/results/{task_id}/`. Keep credentials out of Git and use the stack on a

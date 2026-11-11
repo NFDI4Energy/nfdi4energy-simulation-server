@@ -3,13 +3,16 @@ services:
   web:
     build:
       context: ./fastapi_app
-    network_mode: "host"
+    ports: ["127.0.0.1:5001:5001"]
+    networks: [sim_network]
+    command: ["uvicorn", "webapp:app", "--host", "0.0.0.0", "--port", "5001", "--proxy-headers", "--ssl-keyfile", "/certs/key.pem", "--ssl-certfile", "/certs/cert.pem"]
     environment:
-      - RABBITMQ_HOST=localhost
-      - REDIS_HOST=localhost
+      - RABBITMQ_HOST=rabbitmq
+      - REDIS_HOST=redis
       - RESULTS_DIR=/data/results
       - RESOURCES_DIR=/data/resources
-      - DATABASE_URL=postgresql://simserver:${DB_PASSWORD:?set DB_PASSWORD in .env}@localhost:5433/simserver
+      - DATABASE_URL=postgresql://simserver:${DB_PASSWORD:?set DB_PASSWORD in .env}@db:5432/simserver
+      - MOSAIK_GUI_URL=http://mosaik-gui
       - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:?set OIDC_CLIENT_ID in .env}
       - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:?set OIDC_CLIENT_SECRET in .env}
       - OIDC_DISCOVERY_URL=https://regapp.nfdi-aai.de/oidc/realms/nfdi/.well-known/openid-configuration
@@ -78,7 +81,7 @@ services:
 
   mosaik-gui:
     image: registry.gitlab.com/mosaik/mosaik-gui/frontend:nfdi4energy-simaas
-    ports: ["127.0.0.1:8002:80"]
+    expose: ["80"]
     environment:
       MOSAIK_ORBIT_PROXY_HOST: mosaik-orbit
       MOSAIK_ORBIT_PORT: "8442"

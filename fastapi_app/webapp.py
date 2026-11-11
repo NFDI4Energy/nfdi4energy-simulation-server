@@ -25,6 +25,7 @@ from fastapi_app.frameworks.dacedsx.submission import validate_scenario, Lifecyc
 from fastapi_app.frameworks.dacedsx.status import EventEvidence
 from fastapi_app.infrastructure.rabbitmq_client import SimulationQueue
 from fastapi_app.frameworks.mosaik.routes import router as mosaik_router
+from fastapi_app.frameworks.mosaik.editor import router as mosaik_editor_router
 
 logger = logging.getLogger(__name__)
 SERVER_ROOT = Path(__file__).resolve().parent
@@ -37,6 +38,7 @@ def create_app(settings=None):
     app.include_router(auth_router)
     app.include_router(dacedsx_router)
     app.include_router(mosaik_router)
+    app.include_router(mosaik_editor_router)
     app.include_router(task_router)
     app.include_router(monitor_router)
     app.mount("/static", StaticFiles(directory=str(SERVER_ROOT / "static")), name="static")

@@ -33,11 +33,10 @@
 #
 # Forward the HTTPS web service in another terminal:
 #   kubectl -n simservice port-forward service/web 5001:5001
-#   kubectl -n simservice port-forward service/mosaik-gui 8002:80
 #
 # Open:
 #   https://localhost:5001
-#   http://localhost:8002 (Mosaik scenario editor, sharing Orbit with the worker)
+#   https://localhost:5001/mosaik/ (Mosaik editor, requiring the web login)
 #
 # Inspect the cluster:
 #   kubectl -n simservice get pods,jobs
@@ -238,8 +237,7 @@ cat <<EOF
 Next terminals:
   minikube -p ${PROFILE} mount "${ROOT_DIR}/data:/data"
   kubectl -n ${NAMESPACE} port-forward service/web 5001:5001
-  kubectl -n ${NAMESPACE} port-forward service/mosaik-gui 8002:80
 
 Then open https://localhost:5001
-The Mosaik Create scenario action opens http://localhost:8002
+The Mosaik Create scenario action opens https://localhost:5001/mosaik/ using the web login.
 EOF

@@ -6,12 +6,14 @@ from starlette.middleware.sessions import SessionMiddleware
 from fastapi_app.authentication.auth import LOCAL_USER_ID, create_oauth, router as auth_router
 from fastapi_app.core.settings import Settings
 from fastapi_app.persistence.database import create_database, init_db
+from fastapi_app.webapp import SESSION_COOKIE
 
 
 def auth_app(settings, tmp_path):
     """File-backed SQLite: the login route touches the database from a worker thread."""
     app = FastAPI()
-    app.add_middleware(SessionMiddleware, secret_key="test")
+    # https_only mirrors SESSION_HTTPS_ONLY=true, which build-minikube.sh sets on the web deployment.
+    app.add_middleware(SessionMiddleware, secret_key="test", https_only=True, **SESSION_COOKIE)
     app.include_router(auth_router)
     engine, factory = create_database(f"sqlite:///{tmp_path}/auth.db")
     init_db(engine)
@@ -26,9 +28,12 @@ def test_me_requires_login(tmp_path):
 
 
 def test_local_login_when_auth_is_disabled(tmp_path):
-    client = TestClient(auth_app(Settings(session_secret="x", auth_disabled=True), tmp_path))
+    client = TestClient(auth_app(Settings(session_secret="x", auth_disabled=True), tmp_path),
+                        base_url="https://testserver")
     response = client.get("/auth/login", follow_redirects=False)
     assert response.status_code == 307 and response.headers["location"] == "/dashboard/"
+    cookie = response.headers["set-cookie"].lower()
+    assert "secure" in cookie and "httponly" in cookie and "samesite=lax" in cookie
     me = client.get("/auth/me").json()
     assert me["id"] == LOCAL_USER_ID
     assert me["capabilities"] == {"mosaikSubmissionEnabled": True}
@@ -37,9 +42,16 @@ def test_local_login_when_auth_is_disabled(tmp_path):
     assert client.get("/auth/me").status_code == 401
 
 
+def test_session_cookie_is_not_sent_over_plain_http(tmp_path):
+    client = TestClient(auth_app(Settings(session_secret="x", auth_disabled=True), tmp_path),
+                        base_url="http://testserver")
+    client.get("/auth/login", follow_redirects=False)
+    assert client.get("/auth/me").status_code == 401
+
+
 def test_local_session_is_invalid_once_oidc_is_enabled(tmp_path):
     app = auth_app(Settings(session_secret="x", auth_disabled=True), tmp_path)
-    client = TestClient(app)
+    client = TestClient(app, base_url="https://testserver")
     client.get("/auth/login", follow_redirects=False)
     assert client.get("/auth/me").status_code == 200
     app.state.settings = Settings(session_secret="x", oidc_client_id="id", oidc_client_secret="s")

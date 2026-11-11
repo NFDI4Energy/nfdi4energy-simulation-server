@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.js",
+    "check": "svelte-check --threshold error",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
@@ -12,6 +13,7 @@
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^3.0.0",
     "svelte": "^4.2.3",
+    "svelte-check": "^3.8.6",
     "vite": "^5.0.0"
   }
 }

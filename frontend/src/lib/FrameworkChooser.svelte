@@ -2,6 +2,7 @@
   import logo from '../assets/logo.svg';
   export let user;
   export let authenticated = false;
+  /** @type {(framework: string) => void} */
   export let onChoose = () => {};
   export let onLogout = () => {};
 </script>

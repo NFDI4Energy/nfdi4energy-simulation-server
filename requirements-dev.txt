@@ -1,0 +1,4 @@
+# Test and lint tooling for the backend; runtime packages come from fastapi_app/requirements.txt.
+-r fastapi_app/requirements.txt
+pytest==9.2.0
+flake8==7.5.0

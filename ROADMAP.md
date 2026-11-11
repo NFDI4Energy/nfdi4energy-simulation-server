@@ -28,12 +28,12 @@ Für den **öffentlichen Betrieb** müssen die Phasen 0 bis 7 abgeschlossen sein
 
 Tests und CI zuerst, damit die späteren Umbauten abgesichert sind.
 
-7. [ ] Laufzeitdaten aus Git entfernen (`data/resources`, `data/results`) und in `.gitignore` aufnehmen.
-8. [ ] `fastapi_app/static/svelte-dist/` nicht mehr committen, im Docker-Build erzeugen.
-9. [ ] Web-Dockerfile: Python 3.8 (EOL) ersetzen, `requirements.txt` pinnen, non-root-User.
-10. [ ] Backend-Tests anlegen (`fastapi_app/tests/` aus `.gitignore` nehmen).
-11. [ ] CI: Lint, Tests, Frontend-Build, Image-Build.
-12. [ ] Login wieder aktivieren: `AUTH_DISABLED=false`, in Produktion hart verbieten, Session-Cookie `https_only`, OIDC-Client bei NFDI AAI für die spätere Domain beantragen (dauert ggf.).
+7. [x] Laufzeitdaten aus Git entfernen (`data/resources`, `data/results`) und in `.gitignore` aufnehmen. (Branch: `roadmap/phase-1a-repo-hygiene`)
+8. [x] `fastapi_app/static/svelte-dist/` nicht mehr committen, im Docker-Build erzeugen. (Branch: `roadmap/phase-1a-repo-hygiene` für das Entfernen, `roadmap/phase-1b-docker-build` für den Build im Image)
+9. [x] Web-Dockerfile: Python 3.8 (EOL) ersetzen, `requirements.txt` pinnen, non-root-User. (Branch: `roadmap/phase-1b-docker-build`)
+10. [x] Backend-Tests anlegen (`fastapi_app/tests/` aus `.gitignore` nehmen). (Branch: `roadmap/phase-1c-backend-tests-ci`)
+11. [x] CI: Lint, Tests, Frontend-Build, Image-Build. (Branch: `roadmap/phase-1c-backend-tests-ci`; erster CI-Lauf erst nach dem Push)
+12. [~] Login wieder aktivieren: `AUTH_DISABLED=false`, in Produktion hart verbieten, Session-Cookie `https_only`, OIDC-Client bei NFDI AAI für die spätere Domain beantragen (dauert ggf.). (Branch: `roadmap/phase-1d-auth-hardening`; fehlt: OIDC-Client-Registrierung, Angaben in `docs/changes/phase-1.md`)
 
 ## Phase 2: Upstream-PRs an DaceDSX ⏸
 

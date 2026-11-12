@@ -759,74 +759,76 @@ spec:
         app: simservice
     spec:
       serviceAccountName: simservice
-      initContainers:
-        - name: seed-config
-          image: busybox:1.36
-          command:
-            - sh
-            - -c
-            - |
-              mkdir -p /data/logs /data/definitions/domains /data/definitions/layers /data/definitions/components /data/definitions/connectors /data/definitions/resources /data/resources /data/results /data/certs
-              chmod -R a+rwX /data/logs /data/resources /data/results 2>/dev/null || true
-              cp /config/config.properties /data/config.properties
-          volumeMounts:
-            - name: simservice-data
-              mountPath: /data
-            - name: simservice-config
-              mountPath: /config
       containers:
-        - name: simservice
-          image: simservice/simservice:latest
-          imagePullPolicy: Never
-          command:
+      - name: simservice
+        image: simservice/simservice:latest
+        imagePullPolicy: Never
+        command:
+        - sh
+        - -c
+        - ln -sf /data/config.properties /app/config.properties && java -jar /app/simservice.jar
+        ports:
+        - containerPort: 8080
+        env:
+        - name: KAFKA_BROKER
+          value: broker.kafka.svc.cluster.local:9092
+        - name: SCHEMA_REGISTRY
+          value: http://schema-registry.kafka.svc.cluster.local:8081
+        - name: RABBITMQ_HOST
+          value: rabbitmq.simservice.svc.cluster.local
+        - name: REDIS_HOST
+          value: redis.simservice.svc.cluster.local
+        - name: K8S_NAMESPACE
+          value: simservice
+        - name: CONTAINER_REGISTRY
+          value: simservice
+        volumeMounts:
+        - name: simservice-data
+          mountPath: /data/resources
+          subPath: resources
+          readOnly: true
+        - name: simservice-data
+          mountPath: /data/results
+          subPath: results
+        - name: simservice-data
+          mountPath: /data/logs
+          subPath: logs
+        - name: simservice-data
+          mountPath: /data/definitions
+          subPath: definitions
+          readOnly: true
+        - name: simservice-config
+          mountPath: /data/config.properties
+          subPath: config.properties
+          readOnly: true
+        livenessProbe:
+          exec:
+            command:
             - sh
             - -c
-            - ln -sf /data/config.properties /app/config.properties && java -jar /app/simservice.jar
-          ports:
-            - containerPort: 8080
-          env:
-            - name: KAFKA_BROKER
-              value: broker.kafka.svc.cluster.local:9092
-            - name: SCHEMA_REGISTRY
-              value: http://schema-registry.kafka.svc.cluster.local:8081
-            - name: RABBITMQ_HOST
-              value: rabbitmq.simservice.svc.cluster.local
-            - name: REDIS_HOST
-              value: redis.simservice.svc.cluster.local
-            - name: K8S_NAMESPACE
-              value: simservice
-            - name: CONTAINER_REGISTRY
-              value: simservice
-          volumeMounts:
-            - name: simservice-data
-              mountPath: /data
-          livenessProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - kill -0 1
-            initialDelaySeconds: 60
-            periodSeconds: 30
-            timeoutSeconds: 10
-            failureThreshold: 3
-          readinessProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - kill -0 1
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
+            - kill -0 1
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - kill -0 1
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
       volumes:
-        - name: simservice-data
-          persistentVolumeClaim:
-            claimName: simservice-data-pvc
-        - name: simservice-config
-          configMap:
-            name: simservice-config
+      - name: simservice-data
+        persistentVolumeClaim:
+          claimName: simservice-data-pvc
+      - name: simservice-config
+        configMap:
+          name: simservice-config
+
 ---
 apiVersion: v1
 kind: Service

@@ -161,7 +161,7 @@ public class KubernetesJobExecutor extends Thread {
             }
             env.put("TASK_ID", taskId);
             env.put("TASK_DIR", resourceDir + "/" + taskId);
-            env.put("RESOURCES_DIR", resourceDir + "/" + taskId);
+            env.put("RESOURCES_DIR", "/work/resources");
             env.put("RESULTS_DIR", resultsDir + "/" + taskId);
         }
         
@@ -196,8 +196,12 @@ public class KubernetesJobExecutor extends Thread {
      * Create the Kubernetes Job specification
      */
     private Job createJobSpec() {
+        if (taskId == null || !taskId.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) {
+            throw new IllegalArgumentException("Task-scoped execution requires a canonical task UUID");
+        }
         Map<String, String> labels = new HashMap<>();
-        labels.put("app", "simservice");
+        labels.put("app", "simulation-wrapper");
+        labels.put("task-id", taskId);
         labels.put("scenarioID", scenarioID.substring(0, Math.min(63, scenarioID.length())));
         labels.put("instanceID", instanceID.substring(0, Math.min(63, instanceID.length())));
         labels.put("componentType", type.replaceAll("[^a-zA-Z0-9-_.]", "-").substring(0, Math.min(63, type.length())));
@@ -220,6 +224,7 @@ public class KubernetesJobExecutor extends Thread {
                         .withLabels(labels)
                     .endMetadata()
                     .withNewSpec()
+                        .withAutomountServiceAccountToken(false)
                         .withRestartPolicy("Never")
                         .addNewVolume()
                             .withName("simservice-data")
@@ -227,10 +232,24 @@ public class KubernetesJobExecutor extends Thread {
                                 .withClaimName("simservice-data-pvc")
                             .endPersistentVolumeClaim()
                         .endVolume()
+                        .addNewVolume().withName("work").withNewEmptyDir().endEmptyDir().endVolume()
+                        .addNewInitContainer()
+                            .withName("copy-task-inputs").withImage("busybox:1.36")
+                            .withCommand("sh", "-ec", "mkdir -p /work/resources && cp -R /input/. /work/resources/")
+                            .addNewVolumeMount().withName("simservice-data").withMountPath("/input")
+                                .withSubPath("resources/" + taskId).withReadOnly(true).endVolumeMount()
+                            .addNewVolumeMount().withName("work").withMountPath("/work").endVolumeMount()
+                        .endInitContainer()
+                        .addNewVolume()
+                            .withName("wrapper-config")
+                            .withNewConfigMap().withName("simservice-config").endConfigMap()
+                        .endVolume()
                         .addNewContainer()
                             .withName("wrapper")
                             .withImage(getContainerImage())
                             .withImagePullPolicy("Never")
+                            .withNewSecurityContext().withAllowPrivilegeEscalation(false)
+                                .withNewCapabilities().addToDrop("ALL").endCapabilities().endSecurityContext()
                             .withCommand("sh", "-c", buildWrapperLaunchCommand())
                             .addAllToEnv(envMap.entrySet().stream()
                                 .map(e -> new EnvVarBuilder()
@@ -240,7 +259,23 @@ public class KubernetesJobExecutor extends Thread {
                                 .collect(java.util.stream.Collectors.toList()))
                             .addNewVolumeMount()
                                 .withName("simservice-data")
-                                .withMountPath("/data")
+                                .withMountPath("/data/resources/" + taskId)
+                                .withSubPath("resources/" + taskId)
+                                .withReadOnly(true)
+                            .endVolumeMount()
+                            .addNewVolumeMount()
+                                .withName("simservice-data")
+                                .withMountPath("/data/results/" + taskId)
+                                .withSubPath("results/" + taskId)
+                            .endVolumeMount()
+                            .addNewVolumeMount()
+                                .withName("work").withMountPath("/work")
+                            .endVolumeMount()
+                            .addNewVolumeMount()
+                                .withName("wrapper-config")
+                                .withMountPath("/data/config.properties")
+                                .withSubPath("config.properties")
+                                .withReadOnly(true)
                             .endVolumeMount()
                         .endContainer()
                     .endSpec()

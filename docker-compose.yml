@@ -23,7 +23,8 @@ services:
       - rabbitmq
       - db
     volumes:
-      - ./data:/data
+      - ./data/resources:/data/resources
+      - ./data/results:/data/results
       - ./certs:/certs:ro
 
   db:
@@ -67,7 +68,8 @@ services:
       - redis
       - rabbitmq
     volumes:
-      - ./data:/data
+      - ./data/resources:/data/resources:ro
+      - ./data/results:/data/results
     networks:
       - sim_network
 

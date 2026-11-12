@@ -3,7 +3,7 @@ services:
   web:
     build:
       context: ./fastapi_app
-    ports: ["127.0.0.1:5001:5001"]
+    ports: ["127.0.0.1:5001:5001", "127.0.0.1:8002:5001"]
     networks: [sim_network]
     command: ["uvicorn", "webapp:app", "--host", "0.0.0.0", "--port", "5001", "--proxy-headers", "--ssl-keyfile", "/certs/key.pem", "--ssl-certfile", "/certs/cert.pem"]
     environment:
@@ -33,8 +33,6 @@ services:
       - POSTGRES_USER=simserver
       - POSTGRES_PASSWORD=${DB_PASSWORD:?set DB_PASSWORD in .env}
       - POSTGRES_DB=simserver
-    ports:
-      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
@@ -42,16 +40,11 @@ services:
 
   rabbitmq:
     image: rabbitmq:3-management
-    ports:
-      - "15672:15672"
-      - "5672:5672"
     networks:
       - sim_network
 
   redis:
     image: redis:7
-    ports:
-      - "6379:6379"
     networks:
       - sim_network
 

@@ -75,36 +75,18 @@ spec:
       containers:
         - name: broker
           image: confluentinc/cp-server:7.5.2
+          command: ["kafka-server-start", "/run/kafka/server.properties"]
           ports:
             - containerPort: 29092
             - containerPort: 9092
-          env:
-            - name: KAFKA_BROKER_ID
-              value: "1"
-            - name: KAFKA_ZOOKEEPER_CONNECT
-              value: zookeeper.kafka.svc.cluster.local:2181
-            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
-              value: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-            - name: KAFKA_LISTENERS
-              value: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
-            - name: KAFKA_ADVERTISED_LISTENERS
-              value: PLAINTEXT://broker.kafka.svc.cluster.local:29092,PLAINTEXT_HOST://broker.kafka.svc.cluster.local:9092
-            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
-              value: "1"
-            - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
-              value: "0"
-            - name: KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR
-              value: "1"
-            - name: KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR
-              value: "1"
-            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
-              value: "1"
-            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
-              value: "1"
-            - name: KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL
-              value: http://schema-registry.kafka.svc.cluster.local:8081
-            - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
-              value: "true"
+          volumeMounts:
+            - name: broker-credentials
+              mountPath: /run/kafka
+              readOnly: true
+      volumes:
+        - name: broker-credentials
+          secret:
+            secretName: kafka-broker-secret
 ---
 apiVersion: v1
 kind: Service
@@ -142,33 +124,52 @@ spec:
     spec:
       enableServiceLinks: false
       containers:
-        - name: schema-registry
-          image: confluentinc/cp-schema-registry:7.5.2
-          ports:
-            - containerPort: 8081
-          env:
-            - name: SCHEMA_REGISTRY_HOST_NAME
-              value: schema-registry
-            - name: SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS
-              value: PLAINTEXT://broker.kafka.svc.cluster.local:29092
-            - name: SCHEMA_REGISTRY_KAFKASTORE_TOPIC
-              value: _schemas
-            - name: SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR
-              value: "1"
-            - name: SCHEMA_REGISTRY_LISTENERS
-              value: http://0.0.0.0:8081
-          startupProbe:
-            tcpSocket:
-              port: 8081
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            failureThreshold: 30
-          livenessProbe:
-            httpGet:
-              path: /
-              port: 8081
-            initialDelaySeconds: 60
-            periodSeconds: 30
+      - name: schema-registry
+        image: confluentinc/cp-schema-registry:7.5.2
+        envFrom:
+        - secretRef:
+            name: kafka-registry-secret
+        ports:
+        - containerPort: 8081
+        env:
+        - name: SCHEMA_REGISTRY_HOST_NAME
+          value: schema-registry
+        - name: SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS
+          value: SASL_SSL://broker.kafka.svc.cluster.local:29092
+        - name: SCHEMA_REGISTRY_KAFKASTORE_SECURITY_PROTOCOL
+          value: SASL_SSL
+        - name: SCHEMA_REGISTRY_KAFKASTORE_SASL_MECHANISM
+          value: PLAIN
+        - name: SCHEMA_REGISTRY_KAFKASTORE_TOPIC
+          value: _schemas
+        - name: SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR
+          value: '1'
+        - name: SCHEMA_REGISTRY_LISTENERS
+          value: http://0.0.0.0:8081
+        - name: SCHEMA_REGISTRY_KAFKASTORE_SSL_TRUSTSTORE_TYPE
+          value: PEM
+        - name: SCHEMA_REGISTRY_KAFKASTORE_SSL_TRUSTSTORE_LOCATION
+          value: /run/kafka/ca.crt
+        startupProbe:
+          tcpSocket:
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 30
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8081
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        volumeMounts:
+        - name: kafka-ca
+          mountPath: /run/kafka
+          readOnly: true
+      volumes:
+      - name: kafka-ca
+        secret:
+          secretName: kafka-ca
 ---
 apiVersion: v1
 kind: Service
@@ -190,7 +191,7 @@ metadata:
   name: connect
   namespace: kafka
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: connect
@@ -257,7 +258,7 @@ metadata:
   name: rest-proxy
   namespace: kafka
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: rest-proxy
@@ -300,7 +301,7 @@ metadata:
   name: ksqldb-server
   namespace: kafka
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: ksqldb-server
@@ -505,6 +506,9 @@ spec:
       containers:
         - name: rabbitmq
           image: rabbitmq:3-management
+          envFrom:
+            - secretRef:
+                name: rabbitmq-server-secret
           ports:
             - containerPort: 5672
             - containerPort: 15672
@@ -515,18 +519,16 @@ metadata:
   name: rabbitmq
   namespace: simservice
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: rabbitmq
   ports:
     - name: amqp
       port: 5672
       targetPort: 5672
-      nodePort: 30672
     - name: management
       port: 15672
       targetPort: 15672
-      nodePort: 31672
 
 ---
 apiVersion: apps/v1
@@ -559,6 +561,8 @@ spec:
           image: redis:7
           args:
             - redis-server
+            - --aclfile
+            - /run/redis/users.acl
             - --appendonly
             - "yes"
             - --appendfsync
@@ -568,9 +572,15 @@ spec:
           ports:
             - containerPort: 6379
           volumeMounts:
+            - name: redis-acl
+              mountPath: /run/redis
+              readOnly: true
             - name: redis-data
               mountPath: /data/redis
       volumes:
+        - name: redis-acl
+          secret:
+            secretName: redis-acl
         - name: redis-data
           persistentVolumeClaim:
             claimName: redis-data-pvc
@@ -616,10 +626,8 @@ spec:
             - --port
             - "5001"
             - --proxy-headers
-            - --ssl-keyfile
-            - /data/certs/key.pem
-            - --ssl-certfile
-            - /data/certs/cert.pem
+            - --forwarded-allow-ips
+            - "*"
           ports:
             - containerPort: 5001
           envFrom:
@@ -627,11 +635,17 @@ spec:
                 name: web-config
             - secretRef:
                 name: web-secret
+            - secretRef:
+                name: broker-client-secret
             - configMapRef:
                 name: mosaik-config
           volumeMounts:
             - name: simservice-data
-              mountPath: /data
+              mountPath: /data/resources
+              subPath: resources
+            - name: simservice-data
+              mountPath: /data/results
+              subPath: results
           readinessProbe:
             tcpSocket:
               port: 5001
@@ -648,14 +662,13 @@ metadata:
   name: web
   namespace: simservice
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: web
   ports:
-    - name: https
+    - name: http
       port: 5001
       targetPort: 5001
-      nodePort: 30501
 
 ---
 apiVersion: apps/v1
@@ -674,24 +687,31 @@ spec:
         app: log-consumer
     spec:
       containers:
-        - name: log-consumer
-          image: simaas-web:latest
-          imagePullPolicy: Never
-          command:
-            - python
-            - log_consumer.py
-          envFrom:
-            - configMapRef:
-                name: web-config
-            - secretRef:
-                name: web-secret
-          volumeMounts:
-            - name: simservice-data
-              mountPath: /data
-      volumes:
+      - name: log-consumer
+        image: simaas-web:latest
+        imagePullPolicy: Never
+        command:
+        - python
+        - log_consumer.py
+        envFrom:
+        - configMapRef:
+            name: web-config
+        - secretRef:
+            name: kafka-observer-secret
+        volumeMounts:
         - name: simservice-data
-          persistentVolumeClaim:
-            claimName: simservice-data-pvc
+          mountPath: /data/results
+          subPath: results
+        - name: kafka-ca
+          mountPath: /run/kafka
+          readOnly: true
+      volumes:
+      - name: simservice-data
+        persistentVolumeClaim:
+          claimName: simservice-data-pvc
+      - name: kafka-ca
+        secret:
+          secretName: kafka-ca
 
 ---
 apiVersion: v1
@@ -763,6 +783,11 @@ spec:
       - name: simservice
         image: simservice/simservice:latest
         imagePullPolicy: Never
+        envFrom:
+        - secretRef:
+            name: broker-client-secret
+        - secretRef:
+            name: kafka-client-secret
         command:
         - sh
         - -c
@@ -801,6 +826,9 @@ spec:
           mountPath: /data/config.properties
           subPath: config.properties
           readOnly: true
+        - name: kafka-ca
+          mountPath: /run/kafka
+          readOnly: true
         livenessProbe:
           exec:
             command:
@@ -828,7 +856,9 @@ spec:
       - name: simservice-config
         configMap:
           name: simservice-config
-
+      - name: kafka-ca
+        secret:
+          secretName: kafka-ca
 ---
 apiVersion: v1
 kind: Service
@@ -836,14 +866,13 @@ metadata:
   name: simservice
   namespace: simservice
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: simservice
   ports:
     - name: http
       port: 8080
       targetPort: 8080
-      nodePort: 30080
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -936,6 +965,8 @@ spec:
           image: simaas-mosaik-worker:latest
           imagePullPolicy: Never
           envFrom:
+            - secretRef:
+                name: broker-client-secret
             - configMapRef:
                 name: mosaik-config
           env:
@@ -1053,3 +1084,29 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: mosaik-task-pods
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: simulation-server
+  namespace: simservice
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure,mosaik
+    traefik.ingress.kubernetes.io/router.tls: 'true'
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - localhost
+    secretName: web-tls
+  rules:
+  - host: localhost
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web
+            port:
+              number: 5001

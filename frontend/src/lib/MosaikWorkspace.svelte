@@ -1,10 +1,10 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { submitMosaik, listMosaikTasks, pollMosaikTask, resultUrl } from './mosaikClient.js';
+  import { submitMosaik, listMosaikTasks, pollMosaikTask, resultUrl, mosaikEditorUrl } from './mosaikClient.js';
   export let user;
   export let onSwitchFramework = () => {};
   export let onLogout = () => {};
-  const guiUrl = '/mosaik/';
+  const guiUrl = mosaikEditorUrl();
   let view = 'new';
   let file = null;
   let submitting = false;

@@ -1,0 +1,35 @@
+fullnameOverride: simaas-ingress
+ingressClass:
+  enabled: true
+  isDefaultClass: false
+  name: traefik
+providers:
+  kubernetesCRD:
+    enabled: false
+  kubernetesIngress:
+    enabled: true
+    ingressClass: traefik
+ingressRoute:
+  dashboard:
+    enabled: false
+service:
+  spec:
+    type: LoadBalancer
+    allocateLoadBalancerNodePorts: false
+ports:
+  web:
+    expose:
+      default: false
+  websecure:
+    exposedPort: 5001
+  mosaik:
+    port: 8002
+    exposedPort: 8002
+    expose:
+      default: true
+    protocol: TCP
+additionalArguments:
+  - --entrypoints.websecure.transport.respondingtimeouts.readtimeout=3600s
+  - --entrypoints.websecure.transport.respondingtimeouts.writetimeout=3600s
+  - --entrypoints.mosaik.transport.respondingtimeouts.readtimeout=3600s
+  - --entrypoints.mosaik.transport.respondingtimeouts.writetimeout=3600s

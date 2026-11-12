@@ -1,0 +1,49 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: kafka-acls-
+  namespace: kafka
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 240
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      containers:
+        - name: configure
+          image: confluentinc/cp-server:7.5.2
+          command:
+            - bash
+            - -ec
+            - |
+              acl() { kafka-acls --bootstrap-server broker.kafka.svc.cluster.local:9092 --command-config /credentials/admin.properties "$@"; }
+              for attempt in $(seq 1 30); do
+                if acl --list >/dev/null 2>&1; then break; fi
+                sleep 3
+              done
+              for prefix in orchestration.simulation provision.simulation interaction.simulation; do
+                acl --add --allow-principal User:simaas --operation Read --operation Write --operation Create --operation Delete --operation Describe --topic "$prefix" --resource-pattern-type prefixed
+              done
+              acl --add --allow-principal User:simaas --operation Read --operation Write --operation Create --operation Describe --topic simservice.logs.events
+              acl --add --allow-principal User:simaas --operation Read --group '*'
+              acl --add --allow-principal User:observer --operation Read --operation Create --operation Describe --topic simservice.logs.events
+              acl --add --allow-principal User:observer --operation Read --group simaas-log-consumer
+              acl --add --allow-principal User:registry --operation Read --operation Write --operation Create --operation Describe --topic _schemas
+              acl --add --allow-principal User:registry --operation Read --group schema-registry --resource-pattern-type prefixed
+              acl --add --allow-principal User:registry --operation Describe --operation DescribeConfigs --cluster
+          volumeMounts:
+            - name: ca
+              mountPath: /ca
+              readOnly: true
+            - name: credentials
+              mountPath: /credentials
+              readOnly: true
+      volumes:
+        - name: ca
+          secret:
+            secretName: kafka-ca
+        - name: credentials
+          secret:
+            secretName: kafka-admin-secret

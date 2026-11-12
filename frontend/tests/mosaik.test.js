@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parse } from 'svelte/compiler';
-import { pollMosaikTask, resultUrl, MosaikError, getMosaikTask, submitMosaik } from '../src/lib/mosaikClient.js';
+import { pollMosaikTask, resultUrl, MosaikError, getMosaikTask, submitMosaik, mosaikEditorUrl } from '../src/lib/mosaikClient.js';
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
@@ -26,7 +26,15 @@ test('scenario authoring opens the external GUI in a separate protected tab', ()
   assert.equal(attr('rel').data, 'noopener noreferrer');
   assert.equal(attr('href').expression.name, 'guiUrl');
   const declaration = ast.instance.content.body.flatMap(node => node.declarations || []).find(node => node.id.name === 'guiUrl');
-  assert.equal(declaration.init.value, '/mosaik/');
+  assert.equal(declaration.init.callee.name, 'mosaikEditorUrl');
+});
+
+test('editor uses the browser hostname and scheme on port 8002, never a fixed localhost', () => {
+  assert.equal(mosaikEditorUrl('https://localhost:5001'), 'https://localhost:8002/mosaik/');
+  assert.equal(mosaikEditorUrl('https://simulation.example.org:5001'), 'https://simulation.example.org:8002/mosaik/');
+  assert.equal(mosaikEditorUrl('https://192.0.2.10:5001'), 'https://192.0.2.10:8002/mosaik/');
+  assert.equal(mosaikEditorUrl('http://simulation.example.org:5001'), 'http://simulation.example.org:8002/mosaik/');
+  assert.equal(mosaikEditorUrl('https://[2001:db8::1]:5001'), 'https://[2001:db8::1]:8002/mosaik/');
 });
 
 test('polling serializes reads and stops on terminal state', async () => {

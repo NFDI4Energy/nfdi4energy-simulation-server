@@ -4,11 +4,13 @@
 *.swo
 *.pyc
 .env
+.broker-secrets.env
 __pycache__/
 *.db
 certs/
 /tests/
 /fastapi_app/tests/
+/tmp/
 
 # Runtime task data mounted into Minikube.
 /data/resources/*/

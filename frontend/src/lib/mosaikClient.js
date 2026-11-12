@@ -1,3 +1,9 @@
+export function mosaikEditorUrl(origin = window.location.origin) {
+  const url = new URL('/mosaik/', origin);
+  url.port = '8002';
+  return url.href;
+}
+
 export class MosaikError extends Error {
   constructor(message, status = 0, code = '', taskId = null) {
     super(message);

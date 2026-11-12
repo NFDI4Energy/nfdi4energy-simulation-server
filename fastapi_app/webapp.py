@@ -35,7 +35,7 @@ SERVER_ROOT = Path(__file__).resolve().parent
 def create_app(settings=None):
     settings = settings or Settings.from_env()
     app = FastAPI()
-    app.add_middleware(SessionMiddleware, secret_key=settings.session_secret)
+    app.add_middleware(SessionMiddleware, secret_key=settings.session_secret, https_only=settings.session_https_only)
     app.include_router(auth_router)
     app.include_router(dacedsx_router)
     app.include_router(mosaik_router)

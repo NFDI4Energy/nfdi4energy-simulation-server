@@ -9,7 +9,6 @@ __pycache__/
 *.db
 certs/
 /tests/
-/fastapi_app/tests/
 /tmp/
 
 # Runtime task data mounted into Minikube.

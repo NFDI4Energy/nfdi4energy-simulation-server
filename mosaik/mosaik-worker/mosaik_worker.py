@@ -30,7 +30,7 @@ def connect_rabbitmq():
             time.sleep(3)
 
 
-async def run_mosaik_simulation(scenario, task_id):
+async def run_mosaik_simulation(scenario, task_id, ws_url=None):
     from websockets.asyncio.client import connect
     result = {"status": "success", "task_id": task_id, "logs": [], "sim_progress": 0.0}
     command_sent = False
@@ -62,7 +62,7 @@ async def run_mosaik_simulation(scenario, task_id):
             if "output_file" in init:
                 init["output_file"] = os.path.join(
                     RESULTS_DIR, task_id, os.path.basename(str(init["output_file"])))
-        async with connect(MOSAIK_WS_URL, open_timeout=15, close_timeout=5,
+        async with connect(ws_url or MOSAIK_WS_URL, open_timeout=15, close_timeout=5,
                            max_size=10 * 1024 * 1024) as ws:
             async with asyncio.timeout(15):
                 while (await receive(ws)).get("$type") != "AvailableStarters":
@@ -103,7 +103,14 @@ def process_task(task_id, scenario, tracker):
     result_dir.resolve().relative_to(root)
     result_dir.mkdir(parents=True, exist_ok=True)
     tracker.hset(f"task:{task_id}", mapping={"status": "RUNNING", "error": ""})
-    result = asyncio.run(run_mosaik_simulation(scenario, task_id))
+    from task_orbit import task_orbit
+    result = {"status": "error", "task_id": task_id}
+    try:
+        with task_orbit(task_id) as ws_url:
+            result = asyncio.run(run_mosaik_simulation(scenario, task_id, ws_url))
+    except Exception:
+        # A cleanup failure after dispatch cannot establish that execution stopped.
+        result.update(status="unknown" if "logs" in result else "error", error=traceback.format_exc())
 
     # Publish a complete file before exposing terminal status or acknowledging.
     fd, temporary = tempfile.mkstemp(prefix=".result-", dir=result_dir)

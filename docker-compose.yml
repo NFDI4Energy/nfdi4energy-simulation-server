@@ -91,6 +91,7 @@ services:
     networks: [sim_network]
 
   mosaik-worker:
+    profiles: ["kubernetes-worker"]
     build:
       context: ./mosaik/mosaik-worker
     image: simaas-mosaik-worker:latest
@@ -101,7 +102,7 @@ services:
       MOSAIK_WS_URL: ws://mosaik-orbit:8442
       RESULTS_DIR: /data/results
       RESOURCES_DIR: /data/resources
-    volumes: ["./data:/data"]
+    volumes: ["./data/results:/data/results"]
     depends_on: [rabbitmq, redis, mosaik-orbit]
     networks: [sim_network]
 

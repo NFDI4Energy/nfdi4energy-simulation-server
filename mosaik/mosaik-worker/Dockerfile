@@ -3,5 +3,6 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN uv pip install --system --no-cache -r requirements.txt
 COPY mosaik_worker.py ./
+COPY task_orbit.py ./
 ENV PYTHONUNBUFFERED=1
 CMD ["python", "mosaik_worker.py"]

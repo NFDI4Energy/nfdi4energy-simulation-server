@@ -878,9 +878,6 @@ spec:
         - name: mosaik-orbit
           image: registry.gitlab.com/mosaik/mosaik-gui/mosaik-orbit:nfdi4energy-simaas
           imagePullPolicy: IfNotPresent
-          volumeMounts:
-            - name: simservice-data
-              mountPath: /data
           env:
             - name: MOSAIK_ORBIT_HOST
               value: "0.0.0.0"
@@ -900,10 +897,6 @@ spec:
             limits:
               cpu: "2"
               memory: 2Gi
-      volumes:
-        - name: simservice-data
-          persistentVolumeClaim:
-            claimName: simservice-data-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -936,7 +929,7 @@ spec:
       labels:
         app: mosaik-worker
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: mosaik-worker
       terminationGracePeriodSeconds: 60
       containers:
         - name: mosaik-worker
@@ -952,15 +945,18 @@ spec:
               value: redis.simservice.svc.cluster.local
             - name: MOSAIK_QUEUE
               value: mosaik_requests
-            - name: MOSAIK_WS_URL
-              value: ws://mosaik-orbit.simservice.svc.cluster.local:8442
+            - name: K8S_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             - name: RESULTS_DIR
               value: /data/results
             - name: RESOURCES_DIR
               value: /data/resources
           volumeMounts:
             - name: simservice-data
-              mountPath: /data
+              mountPath: /data/results
+              subPath: results
           resources:
             requests:
               cpu: 50m
@@ -1027,3 +1023,33 @@ spec:
     - name: http
       port: 80
       targetPort: 80
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mosaik-worker
+  namespace: simservice
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mosaik-task-pods
+  namespace: simservice
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [create, get, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mosaik-task-pods
+  namespace: simservice
+subjects:
+  - kind: ServiceAccount
+    name: mosaik-worker
+    namespace: simservice
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mosaik-task-pods

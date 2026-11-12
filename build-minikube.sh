@@ -7,6 +7,8 @@
 #   minikube start --driver=docker
 #   cp .env.example .env
 #   chmod 600 .env
+# Helm is reused if available; otherwise Helm 3 is downloaded with checksum
+# verification to the user's cache directory (requires curl and tar, no sudo).
 #
 # For local use without OIDC credentials, set AUTH_DISABLED=true in .env.
 # Otherwise populate OIDC_CLIENT_ID and OIDC_CLIENT_SECRET (the default mode).
@@ -14,14 +16,14 @@
 # with:
 #   openssl rand -hex 32
 #
-# HTTPS requires:
-#   data/certs/key.pem
-#   data/certs/cert.pem
+# HTTPS certificates
+#   certs/key.pem
+#   certs/cert.pem
 #
 # A local self-signed pair can be generated with:
-#   mkdir -p data/certs
+#   mkdir -p certs
 #   openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
-#     -keyout data/certs/key.pem -out data/certs/cert.pem \
+#     -keyout certs/key.pem -out certs/cert.pem \
 #     -subj "/CN=localhost" \
 #     -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
 #
@@ -31,12 +33,14 @@
 # Build and deploy:
 #   ./build-minikube.sh
 #
-# Forward the HTTPS web service in another terminal:
-#   kubectl -n simservice port-forward service/web 5001:5001
+# Expose the authenticated HTTPS gateway, not the internal editor:
+#   kubectl -n ingress-system port-forward service/simaas-ingress 5001:5001 8002:8002
 #
 # Open:
 #   https://localhost:5001
-#   https://localhost:5001/mosaik/ (Mosaik editor, requiring the web login)
+#   https://localhost:8002/mosaik/ (Mosaik editor, requiring the web login)
+# For a server, set SIM_SERVER_HOST and SIM_SERVER_URL to its public hostname
+# and HTTPS origin (e.g. https://simulation.example.org:5001), and use OIDC.
 #
 # Inspect the cluster:
 #   kubectl -n simservice get pods,jobs
@@ -55,7 +59,7 @@ set -Eeuo pipefail
 
 readonly ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly PROFILE="${MINIKUBE_PROFILE:-minikube}"
-readonly ENV_FILE="${ENV_FILE:-${ROOT_DIR}/.env}"
+readonly ENV_FILE="${ROOT_DIR}/.env"
 readonly MANIFEST="${ROOT_DIR}/simservice/k8s/minikube-full-stack.yaml"
 readonly NAMESPACE="simservice"
 
@@ -81,6 +85,34 @@ trap 'printf "Build failed at line %s.\n" "${LINENO}" >&2' ERR
 
 require_command() {
     command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
+}
+
+ensure_helm() {
+    if command -v helm >/dev/null 2>&1; then
+        return
+    fi
+
+    local version="v3.22.1"
+    local install_dir="${XDG_CACHE_HOME:-${HOME}/.cache}/simaas/helm-${version}"
+    export PATH="${install_dir}:${PATH}"
+    if command -v helm >/dev/null 2>&1; then
+        return
+    fi
+
+    require_command curl
+    require_command tar
+    mkdir -p "${install_dir}"
+    TEMP_DIR="$(mktemp -d)"
+    log "Installing Helm ${version} locally (no sudo)"
+    curl --fail --silent --show-error --location --retry 3 \
+        --connect-timeout 15 --max-time 120 \
+        "https://raw.githubusercontent.com/helm/helm/${version}/scripts/get-helm-3" \
+        --output "${TEMP_DIR}/install-helm.sh"
+    HELM_INSTALL_DIR="${install_dir}" USE_SUDO=false VERIFY_CHECKSUM=true \
+        bash "${TEMP_DIR}/install-helm.sh" --version "${version}"
+    cleanup
+    TEMP_DIR=""
+    require_command helm
 }
 
 require_value() {
@@ -110,20 +142,81 @@ fi
 
 [[ $# -eq 0 ]] || fail "Unknown argument: $1"
 
-for command_name in minikube kubectl docker npm python3; do
+for command_name in minikube kubectl docker npm python3 openssl; do
     require_command "${command_name}"
 done
+ensure_helm
 
 [[ -f "${ENV_FILE}" ]] || fail "Create ${ENV_FILE} from .env.example and populate it first"
 [[ -f "${MANIFEST}" ]] || fail "Kubernetes manifest not found: ${MANIFEST}"
-[[ -f "${ROOT_DIR}/data/certs/key.pem" ]] || fail "Missing data/certs/key.pem"
-[[ -f "${ROOT_DIR}/data/certs/cert.pem" ]] || fail "Missing data/certs/cert.pem"
+mkdir -p "${ROOT_DIR}/certs"
+for name in key.pem cert.pem; do
+    if [[ -f "${ROOT_DIR}/data/certs/${name}" ]]; then
+        if [[ -f "${ROOT_DIR}/certs/${name}" ]]; then
+            cmp -s "${ROOT_DIR}/data/certs/${name}" "${ROOT_DIR}/certs/${name}" || fail "Conflicting TLS files; move data/certs outside shared storage first"
+            rm "${ROOT_DIR}/data/certs/${name}"
+        else
+            mv "${ROOT_DIR}/data/certs/${name}" "${ROOT_DIR}/certs/${name}"
+        fi
+    fi
+done
+[[ -f "${ROOT_DIR}/certs/key.pem" ]] || fail "Missing certs/key.pem"
+[[ -f "${ROOT_DIR}/certs/cert.pem" ]] || fail "Missing certs/cert.pem"
+chmod 600 "${ROOT_DIR}/certs/key.pem"
 
 chmod 600 "${ENV_FILE}"
 set -a
 # shellcheck disable=SC1090
 source "${ENV_FILE}"
 set +a
+
+SIM_SERVER_HOST="${SIM_SERVER_HOST:-localhost}"
+SIM_SERVER_URL="${SIM_SERVER_URL:-https://${SIM_SERVER_HOST}:5001}"
+[[ "${SIM_SERVER_HOST}" =~ ^[a-zA-Z0-9.-]+$ ]] || fail "Invalid SIM_SERVER_HOST"
+python3 - "${SIM_SERVER_HOST}" "${SIM_SERVER_URL}" <<'PY'
+import sys
+from urllib.parse import urlsplit
+url = urlsplit(sys.argv[2])
+assert (url.scheme == 'https' and url.hostname == sys.argv[1] and not url.username and
+        not url.password and not url.path and not url.query and not url.fragment), 'Invalid SIM_SERVER_URL origin'
+assert url.port is None or 0 < url.port < 65536, 'Invalid SIM_SERVER_URL port'
+PY
+openssl x509 -in "${ROOT_DIR}/certs/cert.pem" -noout -checkhost "${SIM_SERVER_HOST}" >/dev/null || fail "TLS certificate does not cover SIM_SERVER_HOST"
+if [[ "${AUTH_DISABLED:-false}" == true && "${SIM_SERVER_HOST}" != localhost ]]; then
+    fail "Shared local login requires localhost; configure OIDC for a multi-user deployment"
+fi
+
+# Persist generated broker credentials across rebuilds; never rotate them implicitly.
+if [[ ! -f "${ROOT_DIR}/.broker-secrets.env" ]]; then
+    python3 - "${ROOT_DIR}/.broker-secrets.env" <<'PY'
+import os, secrets, sys
+names = ('RABBITMQ_PASSWORD', 'REDIS_PASSWORD', 'KAFKA_APP_PASSWORD', 'KAFKA_ADMIN_PASSWORD',
+         'KAFKA_OBSERVER_PASSWORD', 'KAFKA_REGISTRY_PASSWORD')
+fd = os.open(sys.argv[1], os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+with os.fdopen(fd, 'w') as target:
+    for name in names:
+        target.write(name + '=' + secrets.token_hex(32) + '\n')
+PY
+fi
+chmod 600 "${ROOT_DIR}/.broker-secrets.env"
+set -a
+source "${ROOT_DIR}/.broker-secrets.env"
+set +a
+
+mkdir -p "${ROOT_DIR}/data/resources" "${ROOT_DIR}/data/results" "${ROOT_DIR}/data/logs" "${ROOT_DIR}/data/definitions"/{domains,layers,components,connectors,resources}
+chmod a+rwx "${ROOT_DIR}/data/resources" "${ROOT_DIR}/data/results" "${ROOT_DIR}/data/logs"
+export KAFKA_TLS_CERT_FILE="${ROOT_DIR}/certs/kafka/cert.pem"
+export KAFKA_TLS_KEY_FILE="${ROOT_DIR}/certs/kafka/key.pem"
+if [[ ! -f "${KAFKA_TLS_CERT_FILE}" || ! -f "${KAFKA_TLS_KEY_FILE}" ]]; then
+    [[ ! -f "${KAFKA_TLS_CERT_FILE}" && ! -f "${KAFKA_TLS_KEY_FILE}" ]] || fail "Incomplete Kafka TLS pair; restore it before proceeding"
+    mkdir -p "${ROOT_DIR}/certs/kafka"
+    openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+        -keyout "${KAFKA_TLS_KEY_FILE}" -out "${KAFKA_TLS_CERT_FILE}" \
+        -subj /CN=broker.kafka.svc.cluster.local \
+        -addext 'subjectAltName=DNS:broker,DNS:broker.kafka,DNS:broker.kafka.svc,DNS:broker.kafka.svc.cluster.local' >/dev/null 2>&1
+    chmod 600 "${KAFKA_TLS_KEY_FILE}"
+fi
+python3 "${ROOT_DIR}/scripts/cluster-secrets.py" >/dev/null
 
 AUTH_DISABLED="${AUTH_DISABLED:-false}"
 case "${AUTH_DISABLED}" in
@@ -169,6 +262,11 @@ build_image "simservice/controllerwrapper-wrapper:latest" "${ROOT_DIR}/simservic
 
 log "Preparing Kubernetes credentials"
 kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace kafka --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n "${NAMESPACE}" create secret tls web-tls \
+    --cert="${ROOT_DIR}/certs/cert.pem" --key="${ROOT_DIR}/certs/key.pem" \
+    --dry-run=client -o yaml | kubectl apply -f -
+python3 "${ROOT_DIR}/scripts/cluster-secrets.py" | kubectl apply -f -
 
 encoded_db_password="$(
     python3 - <<'PY'
@@ -212,6 +310,30 @@ TEMP_DIR=""
 log "Applying the full Minikube stack"
 kubectl apply -f "${MANIFEST}"
 kubectl -n "${NAMESPACE}" set env deployment/web AUTH_DISABLED="${AUTH_DISABLED}"
+kubectl -n "${NAMESPACE}" set env deployment/web SESSION_HTTPS_ONLY=true OIDC_REDIRECT_URI="${SIM_SERVER_URL}/auth/callback"
+python3 - "${SIM_SERVER_HOST}" <<'PY' | kubectl apply -f -
+import json, sys
+print(json.dumps({'apiVersion':'networking.k8s.io/v1','kind':'Ingress',
+    'metadata':{'name':'simulation-server','namespace':'simservice','annotations':{
+        'traefik.ingress.kubernetes.io/router.entrypoints':'websecure,mosaik',
+        'traefik.ingress.kubernetes.io/router.tls':'true'}},
+    'spec':{'ingressClassName':'traefik','tls':[{'hosts':[sys.argv[1]],'secretName':'web-tls'}],
+            'rules':[{'host':sys.argv[1],'http':{'paths':[{'path':'/','pathType':'Prefix',
+                'backend':{'service':{'name':'web','port':{'number':5001}}}}]}}]}}))
+PY
+
+helm repo add traefik https://traefik.github.io/charts --force-update
+helm repo update traefik
+helm upgrade --install simaas-ingress traefik/traefik --version 42.3.2 \
+    --namespace ingress-system --create-namespace \
+    -f "${ROOT_DIR}/simservice/k8s/traefik-values.yaml" --timeout 300s
+# Local port-forwarding needs a ready controller, not a LoadBalancer external IP.
+kubectl -n ingress-system rollout status deployment/simaas-ingress --timeout=300s
+
+log "Configuring Kafka ACLs"
+acl_job="$(kubectl create -f "${ROOT_DIR}/simservice/k8s/kafka-acls.yaml" -o name)"
+kubectl -n kafka wait --for=condition=complete "${acl_job}" --timeout=240s
+kubectl -n "${NAMESPACE}" rollout status deployment/postgres --timeout=180s
 
 log "Migrating task framework metadata"
 migration_job="$(kubectl create -f "${ROOT_DIR}/simservice/k8s/task-framework-migration.yaml" -o name)"
@@ -236,8 +358,8 @@ cat <<EOF
 
 Next terminals:
   minikube -p ${PROFILE} mount "${ROOT_DIR}/data:/data"
-  kubectl -n ${NAMESPACE} port-forward service/web 5001:5001
+  kubectl -n ingress-system port-forward service/simaas-ingress 5001:5001 8002:8002
 
-Then open https://localhost:5001
-The Mosaik Create scenario action opens https://localhost:5001/mosaik/ using the web login.
+Then open ${SIM_SERVER_URL}
+The Mosaik editor uses https://${SIM_SERVER_HOST}:8002/mosaik/ with the web login.
 EOF

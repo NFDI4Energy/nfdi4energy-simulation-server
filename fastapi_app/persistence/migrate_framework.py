@@ -8,8 +8,10 @@ def verify_framework(connection):
     if "framework" not in columns:
         raise RuntimeError("Task framework migration required: run python -m "
                            "fastapi_app.persistence.migrate_framework before deploying the web application")
+    # Preserve inactive VILLAS history without registering or enabling that framework.
     invalid = connection.execute(text(
-        "SELECT COUNT(*) FROM tasks WHERE framework IS NULL OR framework NOT IN ('dacedsx', 'mosaik')"
+        "SELECT COUNT(*) FROM tasks WHERE framework IS NULL "
+        "OR framework NOT IN ('dacedsx', 'mosaik', 'villas')"
     )).scalar()
     if invalid:
         raise RuntimeError("Unexpected task framework values; inspect metadata before continuing")

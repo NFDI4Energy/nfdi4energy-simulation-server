@@ -82,7 +82,8 @@ sequenceDiagram
 
 ## Prerequisites
 
-- Docker, Minikube, kubectl, Git, Node.js/npm, Python 3, and OpenSSL.
+- Docker, Minikube, kubectl, Git, Node.js/npm, Python 3, OpenSSL, curl, and tar.
+- The build script installs Helm 3 locally if Helm is missing; no `sudo` needed.
 - OIDC credentials are optional for local development.
 
 ## Getting Started
@@ -109,23 +110,29 @@ bash build-minikube.sh
 Keep the data mount running. After deployment, forward the shared web application:
 
 ```bash
-kubectl -n simservice port-forward service/web 5001:5001
+kubectl -n ingress-system port-forward service/simaas-ingress 5001:5001 8002:8002
 ```
 
-Open **https://localhost:5001**, sign in, and choose a framework.
+With the local defaults, open **https://localhost:5001**, sign
+in, and choose a framework.
 In local mode, **Sign in** opens a shared development account without an external
 login. Use this mode only on your own trusted machine, not a public deployment.
 To use OIDC instead, set `AUTH_DISABLED=false`, supply the OIDC credentials in
 `.env`, and rerun the build script.
 
 Open Mosaik's **Create scenario** action to access the editor at
-**https://localhost:5001/mosaik/** using your current login. The editor and its
-WebSocket connection are accessed through the web application; no editor
-port-forward is needed.
+**https://localhost:8002/mosaik/** using your current login. Both forwarded ports
+reach the authenticated web gateway, not the internal editor directly.
+
+On a server, set `SIM_SERVER_HOST` to its public hostname and `SIM_SERVER_URL` to
+its HTTPS origin, for example `https://simulation.example.org:5001`. Use a matching
+TLS certificate and OIDC. The editor link follows the browser hostname on port
+8002; no server address is embedded in the frontend. See the deployment guide for
+network exposure; the commands above bind only to your local machine.
 
 Inputs are stored under `/data/resources/{task_id}/`; results are saved under
-`/data/results/{task_id}/`. Keep credentials out of Git and use the stack on a
-trusted local machine; do not expose the scenario editor publicly.
+`/data/results/{task_id}/`. Keep credentials out of Git and restrict scenario
+authoring and execution to trusted users.
 
 ## License
 

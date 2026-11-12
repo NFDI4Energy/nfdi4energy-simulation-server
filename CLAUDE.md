@@ -9,10 +9,14 @@
   (Inhalt und Akzeptanzkriterien der DaceDSX-PRs, Inventar-Nummern S1–S20, U1–U13, D1–D9 usw.).
   `TODO.md` liefert Hintergrund. Bei Widersprüchen gilt ROADMAP.md und du notierst den Widerspruch.
 - Startprompt pro Phase und Schnitt in Review-Einheiten: `docs/agent-prompt.md`.
-- Verfügbare Werkzeuge: python3/pytest, java/mvn, node/npm, docker, minikube, kubectl, cmake/g++. Helm ist nicht installiert.
+- Verfügbare Werkzeuge: python3/pytest, java/mvn, node/npm, docker, minikube, kubectl, cmake/g++. Helm ist global nicht installiert; `build-minikube.sh` lädt es seit `main` @ 724c9bf bei Bedarf in den Benutzer-Cache.
 
 ## Branches
-- Niemals direkt auf `main` committen. Kein `git push`, kein Force-Push, keine PRs oder Issues öffnen,
+- Niemals direkt auf `main` committen. Das gilt auch für Menschen während der Roadmap-Umsetzung:
+  Änderungen an `main` (wie am 2026-11-12 die Phase-5/6-Commits 343afcc…724c9bf) zwingen alle
+  gestapelten Roadmap-Branches zum Rebase. Lieber einen eigenen Branch, der in der Phasendoku
+  der nächsten Session als „Stand der Vorgänger“ genannt wird.
+- Kein `git push`, kein Force-Push, keine PRs oder Issues öffnen,
   keine Remote-Branches löschen, keine Tags pushen. Das macht der Mensch nach dem Review.
 - Jede Review-Einheit bekommt einen eigenen Branch:
   - SimaaS: `roadmap/phase-<N>[<a|b|c>]-<kurzer-slug>`, z. B. `roadmap/phase-1a-repo-hygiene`

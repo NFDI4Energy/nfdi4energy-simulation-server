@@ -12,6 +12,14 @@ Phase 0 was still in review, so every unit is stacked on the previous one.
 After Phase 0 merges, rebase `roadmap/phase-1a-repo-hygiene` onto `main`; the
 others follow without conflicts.
 
+**Rebased on 2026-11-12** onto `main` @ 724c9bf together with Phase 0 (see
+`phase-0.md`). Decisions taken during the rebase: Mosaik stays enabled by
+default (step 4 revised), the `SESSION_HTTPS_ONLY` flag from `main` is kept and
+step 12 only adds `SameSite=Lax` next to it, and the steps `main` pre-empted
+(38, 39, 41, 47, 55) are marked `[~]` in the roadmap with what is still missing.
+The hidden test suite the maintainer mentioned for those commits is not in the
+repository; Phase 5 should start by bringing it in.
+
 | Unit | Branch | Base | Steps |
 |---|---|---|---|
 | 1a | `roadmap/phase-1a-repo-hygiene` | `roadmap/phase-0c-pandapower-guard` | 7, 8 (untracking) |
@@ -51,7 +59,7 @@ deletions were split into their own branch as CLAUDE.md asks, which gives four.
 
 | Step | Commit | What changed |
 |---|---|---|
-| 12 | `feat(auth): forbid AUTH_DISABLED outside development, secure session cookie` | `SIMAAS_ENV` setting (`development` \| `production`, default `production`); `Settings.validate()` refuses `AUTH_DISABLED=true` unless development; `SessionMiddleware(https_only=True, same_site="lax")`; `build-minikube.sh`, `docker-compose.yml`, `.env.example`, README and guide updated. |
+| 12 | `feat(auth): forbid AUTH_DISABLED outside development, secure session cookie` | `SIMAAS_ENV` setting (`development` \| `production`, default `production`); `Settings.validate()` refuses `AUTH_DISABLED=true` unless development; `SessionMiddleware(https_only=settings.session_https_only, same_site="lax")`, where `SESSION_HTTPS_ONLY` comes from `main` and `build-minikube.sh` sets it to `true`; `build-minikube.sh`, `docker-compose.yml`, `.env.example`, README and guide updated. |
 | 12 | `test(auth): login modes, production guard and cookie flags` | Tests for the guard, the environment parsing and the cookie attributes (Secure, HttpOnly, SameSite=Lax, not sent over HTTP). |
 | – | `docs: add phase 1 notes` | This file, CHANGELOG, roadmap ticks. |
 

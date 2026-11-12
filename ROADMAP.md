@@ -77,10 +77,10 @@ Hängt nicht an DaceDSX und füllt Wartezeiten auf Reviews.
 ## Phase 5: Sicherheit & Isolation
 
 37. [ ] Autorisierung: alle Task- und Ergebnis-Endpunkte prüfen den Besitz.
-38. [ ] Pods mounten nur `resources/<id>` (read-only) und `results/<id>`; Zertifikate als K8s-Secret (setzt 21 voraus).
-39. [ ] NodePorts schließen, nur Ingress öffentlich; Kafka, RabbitMQ und Redis mit Authentifizierung.
+38. [~] Pods mounten nur `resources/<id>` (read-only) und `results/<id>`; Zertifikate als K8s-Secret (setzt 21 voraus). (auf `main` @ 343afcc/9210711 ohne Roadmap-Branch umgesetzt: `subPath`-Mounts, `web-tls`-Secret; fehlt: Review, Tests hier im Repo, Abgleich mit PR 3)
+39. [~] NodePorts schließen, nur Ingress öffentlich; Kafka, RabbitMQ und Redis mit Authentifizierung. (auf `main` @ d6e8a71/9210711 umgesetzt: SASL/TLS, Passwörter aus Secrets, Traefik-Ingress; fehlt: Review und Tests)
 40. [ ] NetworkPolicies: Wrapper-Pods erreichen nur Kafka und Schema Registry.
-41. [ ] Mosaik: Nutzer-Code isolieren (eigener Pod pro Lauf mit Limits), `mosaik-gui` hinter Login und pro Nutzer. Erst danach Mosaik öffentlich anbieten (siehe 4).
+41. [~] Mosaik: Nutzer-Code isolieren (eigener Pod pro Lauf mit Limits), `mosaik-gui` hinter Login und pro Nutzer. Erst danach Mosaik öffentlich anbieten (siehe 4). (auf `main` @ fc6c24a/8641b6f umgesetzt: Editor-Gateway hinter Login, Orbit-Pod pro Lauf; fehlt: Limits/`securityContext`/NetworkPolicy für die Task-Pods, Review, Tests)
 
 ## Phase 6: Deployment auf öffentlichen Servern
 
@@ -89,7 +89,7 @@ Hängt nicht an DaceDSX und füllt Wartezeiten auf Reviews.
 44. [ ] Secrets-Management (Sealed Secrets / External Secrets) statt `.env`.
 45. [ ] Speicher: RWX-Volume statt hostPath; Backups für Postgres und Ergebnisse.
 46. [ ] Kafka verschlanken (KRaft, ohne Connect/ksqlDB/REST-Proxy).
-47. [ ] Ingress mit TLS (cert-manager) auf der öffentlichen Domain; OIDC-Redirect auf diese Domain umstellen (siehe 12).
+47. [~] Ingress mit TLS (cert-manager) auf der öffentlichen Domain; OIDC-Redirect auf diese Domain umstellen (siehe 12). (auf `main` @ 9210711: Traefik-Ingress mit eigenem Zertifikat, `SIM_SERVER_HOST/URL`, Redirect-URI aus `SIM_SERVER_URL`; fehlt: öffentliche Domain, cert-manager)
 48. [ ] Health-/Readiness-Endpunkte für Web, Worker und Bridge.
 49. [ ] Monitoring, zentrale Logs, Alerting bei hängenden Tasks.
 
@@ -105,7 +105,7 @@ Hängt nicht an DaceDSX und füllt Wartezeiten auf Reviews.
 ## Phase 8: Frontend
 
 54. [ ] Start-/Landingpage für DaceDSX: Kurzbeschreibung, Wrapper, Beispielszenarien, Doku-Link.
-55. [ ] Mosaik-GUI-URL konfigurierbar statt `http://localhost:8002`.
+55. [~] Mosaik-GUI-URL konfigurierbar statt `http://localhost:8002`. (auf `main` @ fc6c24a: `MOSAIK_GUI_URL` und `/mosaik/`-Gateway; fehlt: Review)
 56. [ ] Live-Stats optional machen.
 57. [ ] Graph-Ansicht optional bzw. nur für kleine Netze.
 58. [ ] Live-Stats verallgemeinern: generische Metriken über das Event-Schema aus PR 4, domänenspezifische Ansichten als Plugins (nach 20 und 25).

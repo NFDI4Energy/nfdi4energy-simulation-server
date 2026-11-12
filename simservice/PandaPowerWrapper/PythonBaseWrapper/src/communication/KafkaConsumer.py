@@ -14,6 +14,7 @@ import json
 from confluent_kafka import KafkaError
 from AvroProducerConsumer import AvroConsumerStrKey
 from confluent_kafka import Consumer
+from BrokerSecurity import kafka_security
 import threading
 
 
@@ -31,10 +32,12 @@ class KafkaConsumer():
             self.consumerConf = {'bootstrap.servers': broker, 'schema.registry.url': registry, 'group.id': consumerID,
                                  'client.id': consumerID, 'auto.offset.reset': "earliest",
                                  'max.poll.interval.ms': 3000000}
+            self.consumerConf.update(kafka_security())
             self.consumer = AvroConsumerStrKey(self.consumerConf)
         else:
             self.consumerConf = {'bootstrap.servers': broker, 'group.id': consumerID, 'client.id': consumerID,
                                  'auto.offset.reset': "earliest", 'max.poll.interval.ms': 3000000}
+            self.consumerConf.update(kafka_security())
             self.consumer = Consumer(self.consumerConf)
         self.running = True
 

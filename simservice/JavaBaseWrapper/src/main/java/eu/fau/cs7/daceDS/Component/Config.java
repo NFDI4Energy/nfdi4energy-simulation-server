@@ -196,6 +196,23 @@ public class Config
 		return topic.replaceAll("---2e", ".");
 	}	
 	
+    private static Properties kafkaSecurity() {
+        Properties result = new Properties();
+        String user = System.getenv("KAFKA_USERNAME");
+        String password = System.getenv("KAFKA_PASSWORD");
+        if (user != null || password != null) {
+            if (user == null || password == null || !user.matches("[a-zA-Z0-9_-]+") || !password.matches("[a-zA-Z0-9]+")) {
+                throw new IllegalArgumentException("Invalid Kafka credentials");
+            }
+            result.put("security.protocol", "SASL_SSL");
+            result.put("ssl.truststore.type", "PEM");
+            result.put("ssl.truststore.location", "/run/kafka/ca.crt");
+            result.put("sasl.mechanism", "PLAIN");
+            result.put("sasl.jaas.config", "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"" + user + "\" password=\"" + password + "\";");
+        }
+        return result;
+    }
+
 	public static Properties getProperties(String groupID, boolean offsetLatest) {
 		return getProperties(groupID, offsetLatest, false);
 	}
@@ -226,6 +243,7 @@ public class Config
 			kafkaProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");	
 		}
 		
+		kafkaProps.putAll(kafkaSecurity());
 		return kafkaProps;
 	}
 
@@ -263,6 +281,7 @@ public class Config
 			kafkaProducerProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, id);
 		}
 		kafkaProducerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 6000); //was 6000//related to the transactional problem
+		kafkaProducerProps.putAll(kafkaSecurity());
 		return kafkaProducerProps;
 	}
 

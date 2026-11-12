@@ -14,6 +14,7 @@
  * the License.
  ******************************************************************************/
 #include "KafkaConsumer.h"
+#include "KafkaSecurity.h"
 using namespace daceDS;
 std::function<void()> on_signal;
 
@@ -27,6 +28,7 @@ void KafkaConsumer::subscribe(std::string broker,
     KDBGCB("Brokers: " << broker);
 
     conf = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
+    configureKafkaSecurity(conf);
     tconf = RdKafka::Conf::create(RdKafka::Conf::CONF_TOPIC);
 
     std::string errstr = "";

@@ -1,6 +1,7 @@
 """Confirmed publication; ambiguous delivery is surfaced, never retried here."""
 import json
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,8 @@ class SimulationQueue:
         try:
             self.connection = pika.BlockingConnection(pika.ConnectionParameters(
                 host=host,
+                credentials=pika.PlainCredentials(os.environ.get("RABBITMQ_USERNAME", "guest"),
+                                                  os.environ.get("RABBITMQ_PASSWORD", "guest")),
                 connection_attempts=1, socket_timeout=5, stack_timeout=10,
                 blocked_connection_timeout=10, heartbeat=30))
             self.channel = self.connection.channel()

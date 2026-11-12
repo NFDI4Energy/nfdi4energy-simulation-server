@@ -1,5 +1,6 @@
 """FastAPI assembly. Task and monitor behavior lives in services and routers."""
 import logging
+import os
 from pathlib import Path
 from fastapi import FastAPI, Request, Depends
 from fastapi.responses import JSONResponse
@@ -55,6 +56,7 @@ def create_app(settings=None):
         try:
             init_db(engine)
             client = redis.Redis(host=settings.redis_host, port=6379, db=0,
+                                 username=os.environ.get("REDIS_USERNAME"), password=os.environ.get("REDIS_PASSWORD"),
                                  socket_connect_timeout=2, socket_timeout=2)
             app.state.redis = client
             app.state.storage = TaskStorage(settings.resources_dir, settings.results_dir)

@@ -263,6 +263,10 @@ public class SimulationService
 
 				ConnectionFactory factory = new ConnectionFactory();
 				factory.setHost(host);
+				if (System.getenv("RABBITMQ_USERNAME") != null) {
+					factory.setUsername(System.getenv("RABBITMQ_USERNAME"));
+					factory.setPassword(System.getenv("RABBITMQ_PASSWORD"));
+				}
 				factory.setAutomaticRecoveryEnabled(true);
 
 				// Retry loop for initial connection

@@ -14,6 +14,7 @@
  * the License.
  ******************************************************************************/
 #include "KafkaProducer.h"
+#include "KafkaSecurity.h"
 using namespace daceDS;
 
 void KafkaProducer::init(std::string brokers, std::vector<std::string> topics, std::string prodid, std::string loglevel) {
@@ -22,6 +23,7 @@ void KafkaProducer::init(std::string brokers, std::vector<std::string> topics, s
     KDEBUG("Config metadata.broker.list=" << brokers);
 
     conf = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
+    configureKafkaSecurity(conf);
 
     // if (loglevel.size() > 0)
     //     conf->set("debug", loglevel);

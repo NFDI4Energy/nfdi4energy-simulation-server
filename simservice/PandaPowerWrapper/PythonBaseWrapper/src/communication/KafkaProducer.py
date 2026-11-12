@@ -16,6 +16,7 @@ from AvroProducerConsumer import AvroProducerStrKey
 from confluent_kafka import Producer
 from struct import *
 from confluent_kafka.admin import AdminClient, NewTopic
+from BrokerSecurity import kafka_security
 
 
 class KafkaProducer():
@@ -28,7 +29,8 @@ class KafkaProducer():
         self.producerConf = {'bootstrap.servers': broker, 'schema.registry.url': registry, 'acks': '1',
                              'enable.idempotence': 'false',
                              'linger.ms': '0'}
-        self.admin = AdminClient({'bootstrap.servers': broker})
+        self.producerConf.update(kafka_security())
+        self.admin = AdminClient({'bootstrap.servers': broker, **kafka_security()})
         if (useAvro):
             if len(schema) > 0:
                 self.producer = AvroProducerStrKey(self.producerConf, default_value_schema=schema)
@@ -39,6 +41,7 @@ class KafkaProducer():
 
             self.producerConf = {'bootstrap.servers': broker, 'acks': '1', 'enable.idempotence': 'false',
                                  'linger.ms': '0'}
+            self.producerConf.update(kafka_security())
             self.producer = Producer(self.producerConf)
 
     getbinary = lambda x, n: format(x, 'b').zfill(n)

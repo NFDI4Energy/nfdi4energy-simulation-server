@@ -24,6 +24,8 @@ def connect_rabbitmq():
         try:
             return pika.BlockingConnection(pika.ConnectionParameters(
                 host=RABBITMQ_HOST, heartbeat=30, socket_timeout=5,
+                credentials=pika.PlainCredentials(os.environ.get("RABBITMQ_USERNAME", "guest"),
+                                                  os.environ.get("RABBITMQ_PASSWORD", "guest")),
                 stack_timeout=10, blocked_connection_timeout=10))
         except pika.exceptions.AMQPConnectionError:
             print("Waiting for RabbitMQ...", flush=True)
@@ -157,7 +159,8 @@ def main():
         raise ValueError("Mosaik timeouts must be finite and positive")
     print("Starting Mosaik worker (trusted local scenarios only)", flush=True)
     rmq = connect_rabbitmq()
-    tracker = redis.Redis(host=REDIS_HOST, socket_connect_timeout=5, socket_timeout=5)
+    tracker = redis.Redis(host=REDIS_HOST, socket_connect_timeout=5, socket_timeout=5,
+                          username=os.environ.get("REDIS_USERNAME"), password=os.environ.get("REDIS_PASSWORD"))
     try:
         with ThreadPoolExecutor(max_workers=1) as executor:
             channel = rmq.channel()

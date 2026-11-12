@@ -51,6 +51,9 @@ public class ScenarioManager {
 		if (redisHost != null && !redisHost.isEmpty()) {
 			try {
 				redisClient = new Jedis(redisHost, 6379);
+				if (System.getenv("REDIS_PASSWORD") != null) {
+					redisClient.auth(System.getenv("REDIS_USERNAME"), System.getenv("REDIS_PASSWORD"));
+				}
 				logger.info("Redis connected at " + redisHost);
 			} catch (Exception e) {
 				logger.warn("Failed to connect to Redis: " + e.getMessage());

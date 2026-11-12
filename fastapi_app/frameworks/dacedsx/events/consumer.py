@@ -5,6 +5,7 @@ import time
 
 from confluent_kafka import Consumer, KafkaException, TopicPartition
 from confluent_kafka.admin import AdminClient, NewTopic
+from fastapi_app.infrastructure.broker_security import kafka_security
 
 from fastapi_app.frameworks.dacedsx.events.persistence import close_persistence
 from fastapi_app.frameworks.dacedsx.events.ingestion import persist_and_commit
@@ -28,7 +29,7 @@ def stop(_signum, _frame):
 
 
 def ensure_topic_exists():
-    admin = AdminClient({"bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS})
+    admin = AdminClient({"bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS, **kafka_security()})
     metadata = admin.list_topics(timeout=10)
     if EVENT_TOPIC in metadata.topics and metadata.topics[EVENT_TOPIC].error is None:
         return
@@ -51,6 +52,7 @@ def main():
 
     consumer = Consumer(
         {
+            **kafka_security(),
             "bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS,
             "group.id": CONSUMER_GROUP,
             "auto.offset.reset": "earliest",
